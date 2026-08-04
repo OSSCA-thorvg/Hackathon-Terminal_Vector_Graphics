@@ -1,4 +1,4 @@
-# TermVG - Terminal Vector Graphics
+# Hackathon-Terminal_Vector_Graphics
 
 A blazing fast, native-like terminal application that renders vector graphics (Lottie, SVG) directly into your terminal using ThorVG, WebAssembly, and React Ink.
 

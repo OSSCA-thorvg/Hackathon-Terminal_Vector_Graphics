@@ -43,7 +43,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
   onDurationLoad, onSeekConsumed, onFrameUpdate,
 }) => {
   return (
-    <Box width="75%" flexDirection="column" marginLeft={1} borderStyle="single" paddingX={1}>
+    <Box width="68%" flexDirection="column" marginLeft={1} borderStyle="single" paddingX={1}>
       {/* 헤더: 재생 상태 + FPS + 단축키 힌트 */}
       <Box justifyContent="space-between">
         <Text bold color="yellow">

@@ -47,8 +47,8 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
   // ─── 레이아웃 계산 ───
   const pageSize = Math.min(15, Math.max(5, termSize.rows - 17));
   const totalPages = Math.ceil(scanner.fileList.length / pageSize) || 1;
-  const leftPanelCols = Math.floor(termSize.columns * 0.28) - 4;
-  const previewWidth = Math.max(20, Math.floor((termSize.columns - 2) * 0.72) - 4);
+  const leftPanelCols = Math.floor(termSize.columns * 0.30) - 4;
+  const previewWidth = Math.max(20, Math.floor((termSize.columns - 2) * 0.68) - 4);
   const previewHeight = Math.max(10, termSize.rows - 6);
 
   // ─── 키보드 핸들러 ───

@@ -63,7 +63,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
   const [highlightedSearch, setHighlightedSearch] = useState<SearchResultItem | null>(null);
 
   return (
-    <Box width="28%" flexDirection="column" borderStyle="single" paddingX={1}>
+    <Box width="30%" flexDirection="column" borderStyle="single" paddingX={1}>
       {/* META & SETTINGS */}
       <Box flexDirection="column" marginBottom={1}>
         {searchMode && highlightedSearch ? (

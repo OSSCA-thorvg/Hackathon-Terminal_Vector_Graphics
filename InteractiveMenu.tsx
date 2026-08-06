@@ -43,7 +43,7 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
   const [isScanning, setIsScanning] = useState(false);
   const [isInputMode, setIsInputMode] = useState(false);
   const [inputPath, setInputPath] = useState('');
-  const [basePath, setBasePath] = useState(process.cwd());
+  const [basePath, setBasePath] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
 
   // LottieFiles 검색 상태
@@ -55,6 +55,11 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
   const [mcpClient, setMcpClient] = useState<Client | null>(null);
 
   useEffect(() => {
+    if (!basePath) {
+      setFileList([]);
+      setIsScanning(false);
+      return;
+    }
     setIsScanning(true);
     
     // Non-blocking scan simulation
@@ -141,8 +146,9 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
     }, 10);
   }, [scanDepth, basePath]);
 
-  const pageSize = Math.max(5, termSize.rows - 17);
+  const pageSize = Math.min(15, Math.max(5, termSize.rows - 17));
   const totalPages = Math.ceil(fileList.length / pageSize) || 1;
+  const leftPanelCols = Math.floor(termSize.columns * 0.28) - 4; // border + padding 보정
 
   useInput((input, key) => {
     if (isInputMode || searchMode) {
@@ -283,21 +289,32 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
     }
   };
 
-  const previewWidth = Math.max(20, Math.floor((termSize.columns - 2) * 0.7) - 8);
-  const previewHeight = Math.max(10, termSize.rows - 20);
+  const previewWidth = Math.max(20, Math.floor((termSize.columns - 2) * 0.72) - 4);
+  const previewHeight = Math.max(10, termSize.rows - 6);
+
+  // 파일명 트러링 헬퍼
+  const truncLabel = (label: string) => {
+    if (label.length <= leftPanelCols) return label;
+    return label.substring(0, leftPanelCols - 2) + '..';
+  };
 
   return (
-    <Box flexDirection="column" padding={1} width={termSize.columns}>
-      <Box marginBottom={1}>
+    <Box flexDirection="column" paddingX={1} width={termSize.columns}>
+      <Box>
         <Text bold color="cyan">🚀 termvg - ThorVG Terminal Player</Text>
       </Box>
 
       <Box flexDirection="row">
-        {/* LEFT PANEL: File List */}
-        <Box width="30%" flexDirection="column" borderStyle="single" padding={1}>
-          <Box marginBottom={1}>
-            <Text bold color="yellow">Files in Directory</Text>
+        {/* LEFT PANEL: Meta + File List */}
+        <Box width="28%" flexDirection="column" borderStyle="single" paddingX={1}>
+          {/* META & SETTINGS (compact) */}
+          <Box flexDirection="column" marginBottom={1}>
+            <Text color="gray">Name: <Text color="white">{selectedFile ? truncLabel(path.basename(selectedFile.value)) : '-'}</Text></Text>
+            <Text color="gray">{selectedFile ? `${selectedFile.meta.duration}s | ${selectedFile.meta.size}` : ''}</Text>
+            <Text color="gray"><Text color="green">{settingsMode}</Text>(M) Dark:<Text color={invertDark ? 'green' : 'red'}>{invertDark ? 'ON' : 'OFF'}</Text>(D)</Text>
           </Box>
+
+          {/* FILE LIST */}
           {searchMode ? (
             <Box flexDirection="column" marginBottom={1}>
               <Text color="magenta" bold>🌐 LottieFiles 검색</Text>
@@ -324,16 +341,22 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
                 onChange={setInputPath} 
                 onSubmit={(val) => {
                   setBasePath(val);
-                  setScanDepth(5); // Auto deep scan up to 5 levels
+                  setScanDepth(5);
                   setIsInputMode(false);
                 }} 
               />
               <Text color="gray">(Press Enter to apply, ESC to cancel)</Text>
             </Box>
+          ) : !basePath ? (
+            <Box flexDirection="column">
+              <Text color="gray">O 키를 눌러 SVG/Lottie 파일 경로를 지정하세요</Text>
+            </Box>
           ) : (
             fileList.length > 0 ? (
               <SelectInput 
-                items={fileList.slice(currentPage * pageSize, (currentPage + 1) * pageSize)} 
+                items={fileList.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(f => ({
+                  ...f, label: truncLabel(f.label)
+                }))} 
                 limit={pageSize}
                 onSelect={handleSelect} 
                 onHighlight={handleHighlight} 
@@ -343,55 +366,38 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
             )
           )}
           <Box marginTop={1} flexDirection="column">
-            <Text color="cyan">Page {currentPage + 1} / {totalPages} (Total: {fileList.length})</Text>
-            <Text color="gray">Use ↑/↓ to browse, ←/→ to flip pages</Text>
-            <Text color="gray">Press Enter to Play</Text>
-            <Text color="green">Press S to Scan Deeper</Text>
-            <Text color="cyan">Press O to Open Path</Text>
-            <Text color="magenta">Press L to Search LottieFiles</Text>
+            {basePath ? (
+              <>
+                <Text color="cyan">Page {currentPage + 1} / {totalPages} (Total: {fileList.length})</Text>
+                <Text color="gray">↑↓ browse  ←→ pages</Text>
+                <Text color="green">S:Scan  <Text color="magenta">L:LottieFiles</Text></Text>
+              </>
+            ) : (
+              <Text color="gray" dimColor>ThorVG Terminal Vector Graphics Player</Text>
+            )}
+            <Text color="cyan">O:Open Path</Text>
           </Box>
         </Box>
 
-        {/* RIGHT PANEL: Meta & Preview */}
-        <Box width="70%" flexDirection="column" marginLeft={2}>
-          
-          {/* META & SETTINGS */}
-          <Box borderStyle="single" padding={1} flexDirection="row" justifyContent="space-between">
-            <Box flexDirection="column">
-              <Text bold>Metadata</Text>
-              <Text color="gray">Name: {selectedFile ? path.basename(selectedFile.value) : '-'}</Text>
-              <Text color="gray">Duration: {selectedFile ? selectedFile.meta.duration : 0}s</Text>
-              <Text color="gray">Size: {selectedFile ? selectedFile.meta.size : '0kb'}</Text>
-            </Box>
-            <Box flexDirection="column" alignItems="flex-end">
-              <Text bold>Settings</Text>
-              <Text color="gray">Search Depth: <Text color={isScanning ? "yellow" : "cyan"}>{scanDepth} {isScanning ? '(Scanning...)' : ''}</Text> (S)</Text>
-              <Text color="gray">Mode: <Text color="green">{settingsMode}</Text> (M)</Text>
-              <Text color="gray">Auto-Dark: <Text color={invertDark ? 'green' : 'red'}>{invertDark ? 'ON' : 'OFF'}</Text> (D)</Text>
-            </Box>
+        {/* RIGHT PANEL: Preview Only */}
+        <Box width="75%" flexDirection="column" marginLeft={1} borderStyle="single" paddingX={1}>
+          <Box>
+            <Text bold color="yellow">Live Preview</Text>
           </Box>
-
-          {/* PREVIEW */}
-          <Box marginTop={1} flexDirection="column" borderStyle="single" padding={1}>
-            <Box marginBottom={1}>
-              <Text bold color="yellow">Live Preview</Text>
-            </Box>
-            {selectedFile && selectedFile.value !== '' && !selectedFile.value.startsWith('__folder__') ? (
-              <LottiePlayer 
-                key={`${selectedFile.value}-${settingsMode}-${previewWidth}-${previewHeight}`}
-                wasmModule={wasmModule} 
-                filePath={selectedFile.value} 
-                width={previewWidth} 
-                height={previewHeight} 
-                renderMode={settingsMode}
-                invertDark={invertDark}
-                onLoad={handleDurationLoad}
-              />
-            ) : (
-              <Text color="gray">No file selected to preview.</Text>
-            )}
-          </Box>
-
+          {selectedFile && selectedFile.value !== '' && !selectedFile.value.startsWith('__folder__') ? (
+            <LottiePlayer 
+              key={`${selectedFile.value}-${settingsMode}-${previewWidth}-${previewHeight}`}
+              wasmModule={wasmModule} 
+              filePath={selectedFile.value} 
+              width={previewWidth} 
+              height={previewHeight} 
+              renderMode={settingsMode}
+              invertDark={invertDark}
+              onLoad={handleDurationLoad}
+            />
+          ) : (
+            <Text color="gray">No file selected to preview.</Text>
+          )}
         </Box>
       </Box>
     </Box>

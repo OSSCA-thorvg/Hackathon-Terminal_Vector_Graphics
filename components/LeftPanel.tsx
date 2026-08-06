@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import SelectInput from 'ink-select-input';
 import TextInput from 'ink-text-input';
@@ -37,10 +37,17 @@ interface LeftPanelProps {
   leftPanelCols: number;
 }
 
-/** 파일명을 패널 폭에 맞게 잘라내는 헬퍼 */
+/** 라벨을 패널 폭에 맞게 잘라내는 헬퍼 */
 const truncLabel = (label: string, maxCols: number): string => {
   if (label.length <= maxCols) return label;
   return label.substring(0, maxCols - 2) + '..';
+};
+
+/** 큰 숫자를 K/M 단위로 축약 */
+const compactNum = (n: number): string => {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return String(n);
 };
 
 export const LeftPanel: React.FC<LeftPanelProps> = ({
@@ -52,16 +59,36 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
   onHighlight, onSelect,
   leftPanelCols,
 }) => {
+  // 검색 결과 하이라이트 상태 (메타 표시용)
+  const [highlightedSearch, setHighlightedSearch] = useState<SearchResultItem | null>(null);
+
   return (
     <Box width="28%" flexDirection="column" borderStyle="single" paddingX={1}>
-      {/* META & SETTINGS (compact) */}
+      {/* META & SETTINGS */}
       <Box flexDirection="column" marginBottom={1}>
-        <Text color="gray">Name: <Text color="white">{selectedFile ? truncLabel(path.basename(selectedFile.value), leftPanelCols) : '-'}</Text></Text>
-        <Text color="gray">{selectedFile ? `${selectedFile.meta.duration}s | ${selectedFile.meta.size}` : ''}</Text>
-        <Text color="gray"><Text color="green">{settingsMode}</Text>(M) Dark:<Text color={invertDark ? 'green' : 'red'}>{invertDark ? 'ON' : 'OFF'}</Text>(D)</Text>
+        {searchMode && highlightedSearch ? (
+          // 검색 모드: 하이라이트된 항목의 메타 표시
+          <>
+            <Text color="white" bold>{truncLabel(highlightedSearch.meta.name, leftPanelCols)}</Text>
+            <Text color="gray">
+              @{truncLabel(highlightedSearch.meta.author, leftPanelCols - 1)}
+            </Text>
+            <Text color="gray">
+              <Text color="red">♥</Text>{compactNum(highlightedSearch.meta.likes)}{' '}
+              <Text color="cyan">↓</Text>{compactNum(highlightedSearch.meta.downloads)}
+            </Text>
+          </>
+        ) : (
+          // 일반 모드: 파일 메타 표시
+          <>
+            <Text color="gray">Name: <Text color="white">{selectedFile ? truncLabel(path.basename(selectedFile.value), leftPanelCols) : '-'}</Text></Text>
+            <Text color="gray">{selectedFile ? `${selectedFile.meta.duration}s | ${selectedFile.meta.size}` : ''}</Text>
+            <Text color="gray"><Text color="green">{settingsMode}</Text>(M) Dark:<Text color={invertDark ? 'green' : 'red'}>{invertDark ? 'ON' : 'OFF'}</Text>(D)</Text>
+          </>
+        )}
       </Box>
 
-      {/* CONTENT AREA: 검색 / 입력 / 파일 리스트 */}
+      {/* CONTENT AREA */}
       {searchMode ? (
         <Box flexDirection="column" marginBottom={1}>
           <Text color="magenta" bold>🌐 LottieFiles 검색</Text>
@@ -70,15 +97,20 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
             onChange={onSearchQueryChange}
             onSubmit={(val) => { if (val.trim()) onSearchSubmit(val.trim()); }}
           />
-          <Text color="gray">(Enter로 검색, ESC로 취소)</Text>
-          {searchStatus ? <Text color="yellow">{searchStatus}</Text> : null}
+          <Text color="gray">(Enter:검색 ESC:취소)</Text>
+          {searchStatus ? <Text color="yellow">{truncLabel(searchStatus, leftPanelCols)}</Text> : null}
           {searchResults.length > 0 ? (
             <SelectInput
-              items={searchResults.map(r => ({
-                ...r, label: truncLabel(r.label, leftPanelCols)
+              items={searchResults.map((r, i) => ({
+                ...r,
+                label: truncLabel(`${i + 1}. ${r.meta.name}`, leftPanelCols - 2),
               }))}
               limit={pageSize}
               onSelect={onSearchSelect}
+              onHighlight={(item: any) => {
+                const found = searchResults.find(r => r.value === item.value);
+                if (found) setHighlightedSearch(found);
+              }}
             />
           ) : null}
         </Box>
@@ -90,11 +122,11 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
             onChange={onInputPathChange}
             onSubmit={onInputSubmit}
           />
-          <Text color="gray">(Press Enter to apply, ESC to cancel)</Text>
+          <Text color="gray">(Enter to apply, ESC cancel)</Text>
         </Box>
       ) : !basePath ? (
         <Box flexDirection="column">
-          <Text color="gray">O 키를 눌러 SVG/Lottie 파일 경로를 지정하세요</Text>
+          <Text color="gray">O 키를 눌러 경로를 지정하세요</Text>
         </Box>
       ) : (
         fileList.length > 0 ? (
@@ -115,12 +147,12 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
       <Box marginTop={1} flexDirection="column">
         {basePath ? (
           <>
-            <Text color="cyan">Page {currentPage + 1} / {totalPages} (Total: {fileList.length})</Text>
-            <Text color="gray">↑↓ browse  ←→ pages</Text>
-            <Text color="green">S:Scan  <Text color="magenta">L:LottieFiles</Text></Text>
+            <Text color="cyan">Page {currentPage + 1}/{totalPages} ({fileList.length})</Text>
+            <Text color="gray">↑↓ browse ←→ pages</Text>
+            <Text color="green">S:Scan <Text color="magenta">L:LottieFiles</Text></Text>
           </>
         ) : (
-          <Text color="gray" dimColor>ThorVG Terminal Vector Graphics Player</Text>
+          <Text color="gray" dimColor>ThorVG Terminal Player</Text>
         )}
         <Text color="cyan">O:Open Path</Text>
       </Box>

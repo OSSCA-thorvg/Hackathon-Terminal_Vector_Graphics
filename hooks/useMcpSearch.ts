@@ -15,6 +15,8 @@ export interface SearchResultItem {
     name: string;
     author: string;
     id: string;
+    likes: number;
+    downloads: number;
   };
 }
 
@@ -69,13 +71,15 @@ export function useMcpSearch(onFileAdded: (file: FileItem) => void, downloadDir:
       const structured = (result as any).structuredContent;
       const edges = structured?.data?.searchPublicAnimations?.edges || [];
       const items: SearchResultItem[] = edges.map((e: any, i: number) => ({
-        label: `${e.node.name} | 👤${e.node.createdBy?.username || '?'} ❤️${e.node.likesCount || 0} ⬇️${Math.round(e.node.downloads || 0)}`,
+        label: `${e.node.name}`,
         value: `__mcp__${i}`,
         meta: {
           jsonUrl: e.node.jsonUrl || e.node.lottieUrl || null,
           name: e.node.name,
           author: e.node.createdBy?.username || 'unknown',
           id: String(e.node.id),
+          likes: e.node.likesCount || 0,
+          downloads: Math.round(e.node.downloads || 0),
         }
       }));
 

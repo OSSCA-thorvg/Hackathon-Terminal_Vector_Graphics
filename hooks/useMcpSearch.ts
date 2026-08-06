@@ -32,7 +32,7 @@ const SEARCH_QUERY = `
   }
 `;
 
-export function useMcpSearch(onFileAdded: (file: FileItem) => void) {
+export function useMcpSearch(onFileAdded: (file: FileItem) => void, downloadDir: string) {
   const [searchMode, setSearchMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
@@ -92,7 +92,7 @@ export function useMcpSearch(onFileAdded: (file: FileItem) => void) {
     if (!jsonUrl) { setSearchStatus('❌ 다운로드 URL 없음'); return; }
     setSearchStatus('⬇️ 다운로드 중...');
     try {
-      const dir = path.join(os.homedir(), '.termvg', 'downloads');
+      const dir = downloadDir || path.join(os.homedir(), '.termvg', 'downloads');
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       const safeName = `${name}_by_${author}_${id}`.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 60);
       const filePath = path.join(dir, `${safeName}.json`);

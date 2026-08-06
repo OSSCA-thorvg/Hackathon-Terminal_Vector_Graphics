@@ -42,7 +42,7 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
   const mcp = useMcpSearch((newFile) => {
     scanner.prependFile(newFile);
     setSelectedFile(newFile);
-  });
+  }, scanner.basePath);
 
   // ─── 레이아웃 계산 ───
   const pageSize = Math.min(15, Math.max(5, termSize.rows - 17));

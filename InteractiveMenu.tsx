@@ -4,8 +4,12 @@ import SelectInput from 'ink-select-input';
 import TextInput from 'ink-text-input';
 import { realWasmModule } from './realWasmModule.js';
 import { LottiePlayer } from './LottiePlayer.js';
+import { getAccessToken, MCP_ENDPOINT } from './lottieAuth.js';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
 interface FileItem {
   label: string;
@@ -41,6 +45,14 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
   const [inputPath, setInputPath] = useState('');
   const [basePath, setBasePath] = useState(process.cwd());
   const [currentPage, setCurrentPage] = useState(0);
+
+  // LottieFiles 검색 상태
+  const [searchMode, setSearchMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchStatus, setSearchStatus] = useState('');
+  const [mcpClient, setMcpClient] = useState<Client | null>(null);
 
   useEffect(() => {
     setIsScanning(true);
@@ -133,11 +145,14 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
   const totalPages = Math.ceil(fileList.length / pageSize) || 1;
 
   useInput((input, key) => {
-    if (isInputMode) {
+    if (isInputMode || searchMode) {
       if (key.escape) {
         setIsInputMode(false);
+        setSearchMode(false);
+        setSearchResults([]);
+        setSearchStatus('');
       }
-      return; // Let TextInput handle characters
+      return;
     }
     if (key.leftArrow) {
       setCurrentPage(prev => Math.max(0, prev - 1));
@@ -164,7 +179,87 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
       setInputPath(basePath);
       setIsInputMode(true);
     }
+    if (input.toLowerCase() === 'l') {
+      setSearchQuery('');
+      setSearchResults([]);
+      setSearchStatus('');
+      setSearchMode(true);
+    }
   });
+
+  // MCP 검색 실행
+  const doSearch = async (query: string) => {
+    setIsSearching(true);
+    setSearchStatus('🔌 MCP 연결 중...');
+    try {
+      let client = mcpClient;
+      if (!client) {
+        const accessToken = await getAccessToken();
+        client = new Client({ name: 'termvg', version: '1.0.0' }, { capabilities: {} });
+        const transport = new StreamableHTTPClientTransport(
+          new URL(MCP_ENDPOINT),
+          { requestInit: { headers: { 'Authorization': `Bearer ${accessToken}` } } }
+        );
+        await client.connect(transport);
+        setMcpClient(client);
+      }
+      setSearchStatus(`🔍 '${query}' 검색 중...`);
+      const result = await client.callTool({
+        name: 'graphql_execute',
+        arguments: {
+          query: `query Search($q: String!) { searchPublicAnimations(query: $q, first: 10) { edges { node { id name url jsonUrl lottieUrl likesCount downloads description sourceName createdBy { username } } } } }`,
+          variables: { q: query }
+        }
+      });
+      const structured = (result as any).structuredContent;
+      const edges = structured?.data?.searchPublicAnimations?.edges || [];
+      const items = edges.map((e: any, i: number) => ({
+        label: `${e.node.name} | 👤${e.node.createdBy?.username || '?'} ❤️${e.node.likesCount || 0} ⬇️${Math.round(e.node.downloads || 0)}`,
+        value: `__mcp__${i}`,
+        meta: {
+          jsonUrl: e.node.jsonUrl || e.node.lottieUrl || null,
+          name: e.node.name,
+          author: e.node.createdBy?.username || 'unknown',
+          id: String(e.node.id),
+        }
+      }));
+      setSearchResults(items);
+      setSearchStatus(items.length > 0 ? `✅ ${items.length}개 결과` : '❌ 결과 없음');
+    } catch (e: any) {
+      setSearchStatus(`❌ 오류: ${e.message.substring(0, 50)}`);
+    }
+    setIsSearching(false);
+  };
+
+  // MCP 다운로드 + 파일목록 추가
+  const doDownload = async (item: any) => {
+    const { jsonUrl, name, author, id } = item.meta;
+    if (!jsonUrl) { setSearchStatus('❌ 다운로드 URL 없음'); return; }
+    setSearchStatus('⬇️ 다운로드 중...');
+    try {
+      const dir = path.join(os.homedir(), '.termvg', 'downloads');
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const safeName = `${name}_by_${author}_${id}`.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 60);
+      const filePath = path.join(dir, `${safeName}.json`);
+      const res = await fetch(jsonUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      fs.writeFileSync(filePath, await res.text(), 'utf8');
+      // 파일 목록에 추가하고 선택
+      const stats = fs.statSync(filePath);
+      const newFile: FileItem = {
+        label: `🌐 ${name} (${author})`,
+        value: filePath,
+        meta: { duration: 0, size: `${Math.round(stats.size / 1024)}kb` }
+      };
+      setFileList(prev => [newFile, ...prev]);
+      setSelectedFile(newFile);
+      setSearchMode(false);
+      setSearchResults([]);
+      setSearchStatus('');
+    } catch (e: any) {
+      setSearchStatus(`❌ 다운로드 실패: ${e.message.substring(0, 40)}`);
+    }
+  };
 
   const handleHighlight = (item: any) => {
     const file = fileList.find(f => f.value === item.value);
@@ -203,7 +298,25 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
           <Box marginBottom={1}>
             <Text bold color="yellow">Files in Directory</Text>
           </Box>
-          {isInputMode ? (
+          {searchMode ? (
+            <Box flexDirection="column" marginBottom={1}>
+              <Text color="magenta" bold>🌐 LottieFiles 검색</Text>
+              <TextInput 
+                value={searchQuery} 
+                onChange={setSearchQuery} 
+                onSubmit={(val) => { if (val.trim()) doSearch(val.trim()); }} 
+              />
+              <Text color="gray">(Enter로 검색, ESC로 취소)</Text>
+              {searchStatus ? <Text color="yellow">{searchStatus}</Text> : null}
+              {searchResults.length > 0 ? (
+                <SelectInput 
+                  items={searchResults}
+                  limit={pageSize}
+                  onSelect={(item) => doDownload(item)}
+                />
+              ) : null}
+            </Box>
+          ) : isInputMode ? (
             <Box flexDirection="column" marginBottom={1}>
               <Text color="cyan">Enter directory path:</Text>
               <TextInput 
@@ -235,6 +348,7 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
             <Text color="gray">Press Enter to Play</Text>
             <Text color="green">Press S to Scan Deeper</Text>
             <Text color="cyan">Press O to Open Path</Text>
+            <Text color="magenta">Press L to Search LottieFiles</Text>
           </Box>
         </Box>
 

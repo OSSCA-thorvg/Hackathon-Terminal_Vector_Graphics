@@ -1,3 +1,5 @@
+import { Writable } from 'stream';
+
 /**
  * 터미널 Synchronized Output Mode (더블 버퍼링)
  *
@@ -23,7 +25,7 @@ export const disableSyncOutput = () => {
  * 비동기 렌더링 시에도 확실한 더블 버퍼링을 보장합니다.
  */
 export const createSyncStdout = (originalStdout: NodeJS.WriteStream): NodeJS.WriteStream => {
-  const syncStream = new (require('stream').Writable)({
+  const syncStream = new Writable({
     write(chunk: any, encoding: string, callback: () => void) {
       // 1. 동기화 시작 (Begin Synchronized Update)
       originalStdout.write('\x1b[?2026h');

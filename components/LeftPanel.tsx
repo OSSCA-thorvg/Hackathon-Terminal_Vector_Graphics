@@ -74,7 +74,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
           {searchStatus ? <Text color="yellow">{searchStatus}</Text> : null}
           {searchResults.length > 0 ? (
             <SelectInput
-              items={searchResults}
+              items={searchResults.map(r => ({
+                ...r, label: truncLabel(r.label, leftPanelCols)
+              }))}
               limit={pageSize}
               onSelect={onSearchSelect}
             />

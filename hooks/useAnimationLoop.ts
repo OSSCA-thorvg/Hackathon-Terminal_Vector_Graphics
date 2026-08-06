@@ -1,5 +1,4 @@
 import { useRef, useEffect, useCallback } from 'react';
-import { enableSyncOutput, disableSyncOutput } from '../utils/syncOutput.js';
 
 interface AnimationConfig {
   wasmModule: any;
@@ -56,9 +55,7 @@ export function useAnimationLoop(config: AnimationConfig): AnimationControls {
 
     if (ansiString !== prevFrameRef.current) {
       prevFrameRef.current = ansiString;
-      enableSyncOutput();
       cfg.onFrame(ansiString, frame, totalFramesRef.current, fpsValueRef.current);
-      queueMicrotask(() => disableSyncOutput());
     } else {
       // 프레임 내용이 동일하면 sync 불필요, 메타 정보만 갱신
       cfg.onFrame(ansiString, frame, totalFramesRef.current, fpsValueRef.current);

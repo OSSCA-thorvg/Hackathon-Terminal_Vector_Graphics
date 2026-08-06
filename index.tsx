@@ -5,6 +5,7 @@ import meow from 'meow';
 import { InteractiveMenu } from './InteractiveMenu.js';
 import { LottiePlayer } from './LottiePlayer.js';
 import { realWasmModule } from './realWasmModule.js';
+import { createSyncStdout } from './utils/syncOutput.js';
 
 const cli = meow(`
   Usage
@@ -118,5 +119,6 @@ if (command === 'web') {
     process.exit(0);
   });
 } else {
-  render(<App />);
+  // Use custom stdout stream to wrap every Ink render in Sync Output sequences
+  render(<App />, { stdout: createSyncStdout(process.stdout) });
 }

@@ -25,14 +25,32 @@ export const disableSyncOutput = () => {
  * 비동기 렌더링 시에도 확실한 더블 버퍼링을 보장합니다.
  */
 export const createSyncStdout = (originalStdout: NodeJS.WriteStream): NodeJS.WriteStream => {
+  let buffer: Buffer[] = [];
+  let isTickScheduled = false;
+
+  const flushBuffer = () => {
+    if (buffer.length === 0) return;
+    const data = Buffer.concat(buffer);
+    buffer = [];
+    isTickScheduled = false;
+
+    // 1. 동기화 시작 (Begin Synchronized Update)
+    originalStdout.write('\x1b[?2026h');
+    // 2. 버퍼링된 모든 청크(프레임 전체) 출력
+    originalStdout.write(data);
+    // 3. 동기화 종료 (End Synchronized Update)
+    originalStdout.write('\x1b[?2026l');
+  };
+
   const syncStream = new Writable({
     write(chunk: any, encoding: string, callback: () => void) {
-      // 1. 동기화 시작 (Begin Synchronized Update)
-      originalStdout.write('\x1b[?2026h');
-      // 2. Ink의 렌더링 결과(청크) 출력
-      originalStdout.write(chunk, encoding as any);
-      // 3. 동기화 종료 (End Synchronized Update)
-      originalStdout.write('\x1b[?2026l');
+      buffer.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding as BufferEncoding));
+      
+      if (!isTickScheduled) {
+        isTickScheduled = true;
+        // React Ink의 한 렌더 사이클(동기적 write 연속 호출)이 끝나면 한 번에 flush
+        process.nextTick(flushBuffer);
+      }
       callback();
     }
   });

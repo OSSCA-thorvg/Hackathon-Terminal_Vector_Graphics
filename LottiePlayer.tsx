@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Text, Box } from 'ink';
 
 // Mock WASM module interface for ThorVG
@@ -15,22 +15,20 @@ interface LottiePlayerProps {
   wasmModule: any;
   filePath: string;
   width?: number;
-  height?: number; // Should be even for half-block, mod 4 for braille
+  height?: number;
   renderMode?: 'half-block' | 'quadrant' | 'braille';
   invertDark?: boolean;
-  onLoad?: (duration: number) => void;
+  onLoad?: (duration: number, totalFrames: number) => void;
   loop?: boolean;
   onComplete?: () => void;
+  paused?: boolean;
+  seekDelta?: number; // +1 or -1 per step, consumed after render
+  onSeekConsumed?: () => void;
+  onFrameUpdate?: (frame: number, totalFrames: number, fps: number) => void;
 }
 
 /**
  * 터미널 Synchronized Output Mode (더블 버퍼링)
- * 
- * 터미널이 \x1b[?2026h ~ \x1b[?2026l 사이의 모든 출력을 내부 버퍼에 쌓아두고,
- * 종료 마커를 받으면 한 번에 플러시(Flush)합니다.
- * 이를 통해 Clear→Write 사이의 빈 화면이 사용자에게 보이지 않습니다.
- * 
- * 지원 터미널: iTerm2, kitty, WezTerm, Windows Terminal, foot, etc.
  */
 const enableSyncOutput = () => {
   process.stdout.write('\x1b[?2026h');
@@ -49,23 +47,47 @@ export const LottiePlayer: React.FC<LottiePlayerProps> = ({
   invertDark = false,
   onLoad,
   loop = true,
-  onComplete
+  onComplete,
+  paused = false,
+  seekDelta = 0,
+  onSeekConsumed,
+  onFrameUpdate
 }) => {
   const [ansiFrame, setAnsiFrame] = useState<string>('Loading...');
   const prevFrameRef = useRef<string>('');
+  const currentFrameRef = useRef<number>(0);
+  const totalFramesRef = useRef<number>(1);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const modeIntRef = useRef<number>(0);
+  const setupDoneRef = useRef<boolean>(false);
+  const fpsCountRef = useRef<number>(0);
+  const fpsTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const fpsValueRef = useRef<number>(0);
 
+  // 프레임 렌더링 함수 (재생/시크 공용)
+  const renderFrame = useCallback((frame: number) => {
+    const ansiString = wasmModule.renderToString(frame, modeIntRef.current, invertDark);
+    if (ansiString !== prevFrameRef.current) {
+      prevFrameRef.current = ansiString;
+      enableSyncOutput();
+      setAnsiFrame(ansiString);
+      queueMicrotask(() => disableSyncOutput());
+    }
+    fpsCountRef.current++;
+    if (onFrameUpdate) {
+      onFrameUpdate(frame, totalFramesRef.current, fpsValueRef.current);
+    }
+  }, [wasmModule, invertDark, onFrameUpdate]);
+
+  // 초기 설정
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    let currentFrame = 0;
+    let animTimer: NodeJS.Timeout;
 
     const setup = async () => {
-      // 1. Initialize
       await wasmModule.init();
 
-      // Calculate pixel resolution based on render mode
       let pixelWidth = width;
       let pixelHeight = height * 2;
-
       if (renderMode === 'braille') {
         pixelWidth = width * 2;
         pixelHeight = height * 4;
@@ -73,6 +95,10 @@ export const LottiePlayer: React.FC<LottiePlayerProps> = ({
         pixelWidth = width * 2;
         pixelHeight = height * 2;
       }
+
+      if (renderMode === 'quadrant') modeIntRef.current = 1;
+      else if (renderMode === 'braille') modeIntRef.current = 2;
+      else modeIntRef.current = 0;
 
       wasmModule.setSize(pixelWidth, pixelHeight);
 
@@ -83,67 +109,110 @@ export const LottiePlayer: React.FC<LottiePlayerProps> = ({
 
       const totalFrames = Math.max(1, wasmModule.getTotalFrames());
       const duration = wasmModule.getDuration();
+      totalFramesRef.current = totalFrames;
+      currentFrameRef.current = 0;
+      setupDoneRef.current = true;
+
       const fps = 30;
       const frameDelayMs = 1000 / fps;
 
       if (onLoad) {
-        onLoad(duration);
+        onLoad(duration, totalFrames);
       }
 
-      // 2. Render Loop
+      // FPS 카운터: 1초마다 렌더링된 프레임 수를 측정
+      fpsTimerRef.current = setInterval(() => {
+        fpsValueRef.current = fpsCountRef.current;
+        fpsCountRef.current = 0;
+      }, 1000);
+
       const renderNextFrame = () => {
-        // Map renderMode string to integer for C++
-        let modeInt = 0;
-        if (renderMode === 'quadrant') modeInt = 1;
-        if (renderMode === 'braille') modeInt = 2;
+        renderFrame(currentFrameRef.current);
 
-        // Get ANSI string directly from WASM C++ engine!
-        const ansiString = wasmModule.renderToString(currentFrame, modeInt, invertDark);
-
-        // ─── 방법 1: 동일 프레임 스킵 ───
-        // 이전 프레임과 동일하면 setState를 호출하지 않아
-        // React 재조정 + Ink 리렌더를 완전히 건너뜀
-        if (ansiString !== prevFrameRef.current) {
-          prevFrameRef.current = ansiString;
-
-          // ─── 방법 2: Synchronized Output (터미널 더블 버퍼링) ───
-          // Begin Sync → Ink가 Clear+Write → End Sync → 터미널이 한 번에 플러시
-          enableSyncOutput();
-          setAnsiFrame(ansiString);
-          // Ink의 렌더 사이클이 완료된 직후 sync 해제
-          // React의 setState는 비동기이므로 microtask로 예약
-          queueMicrotask(() => {
-            disableSyncOutput();
-          });
-        }
-
-        // Advance frame only if animation has duration
         if (duration > 0) {
-          currentFrame += totalFrames / (duration * fps);
-          if (currentFrame >= totalFrames) {
+          currentFrameRef.current += totalFrames / (duration * fps);
+          if (currentFrameRef.current >= totalFrames) {
             if (loop) {
-              currentFrame = 0;
+              currentFrameRef.current = 0;
             } else {
-              clearInterval(timer);
+              if (timerRef.current) clearInterval(timerRef.current);
               if (onComplete) onComplete();
             }
           }
         }
       };
 
-      timer = setInterval(renderNextFrame, frameDelayMs);
+      animTimer = setInterval(renderNextFrame, frameDelayMs);
+      timerRef.current = animTimer;
     };
 
     setup();
 
     return () => {
-      if (timer) clearInterval(timer);
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (fpsTimerRef.current) clearInterval(fpsTimerRef.current);
+      timerRef.current = null;
+      fpsTimerRef.current = null;
       prevFrameRef.current = '';
+      setupDoneRef.current = false;
     };
   }, [wasmModule, filePath, width, height]);
 
-  // Note: We don't need clear screen or cursor move escape codes 
-  // because Ink handles the terminal layout updating.
+  // 일시정지/재생 제어
+  useEffect(() => {
+    if (!setupDoneRef.current) return;
+
+    if (paused) {
+      // 타이머 정지
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    } else {
+      // 타이머 재개 (이미 돌고 있으면 무시)
+      if (!timerRef.current) {
+        const totalFrames = totalFramesRef.current;
+        const duration = wasmModule.getDuration();
+        const fps = 30;
+        const frameDelayMs = 1000 / fps;
+
+        timerRef.current = setInterval(() => {
+          renderFrame(currentFrameRef.current);
+
+          if (duration > 0) {
+            currentFrameRef.current += totalFrames / (duration * fps);
+            if (currentFrameRef.current >= totalFrames) {
+              if (loop) {
+                currentFrameRef.current = 0;
+              } else {
+                if (timerRef.current) clearInterval(timerRef.current);
+                if (onComplete) onComplete();
+              }
+            }
+          }
+        }, frameDelayMs);
+      }
+    }
+  }, [paused]);
+
+  // 프레임 시크 처리
+  useEffect(() => {
+    if (seekDelta === 0 || !setupDoneRef.current) return;
+
+    const totalFrames = totalFramesRef.current;
+    const step = totalFrames / 30; // 1/30초 단위 이동
+
+    currentFrameRef.current += seekDelta * step;
+
+    // 범위 클램핑
+    if (currentFrameRef.current < 0) currentFrameRef.current = 0;
+    if (currentFrameRef.current >= totalFrames) currentFrameRef.current = totalFrames - 1;
+
+    renderFrame(currentFrameRef.current);
+
+    if (onSeekConsumed) onSeekConsumed();
+  }, [seekDelta]);
+
   return (
     <Box flexDirection="column">
       <Text wrap="truncate">{ansiFrame}</Text>

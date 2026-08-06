@@ -54,6 +54,11 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
   const [searchStatus, setSearchStatus] = useState('');
   const [mcpClient, setMcpClient] = useState<Client | null>(null);
 
+  // 재생 제어 상태
+  const [isPaused, setIsPaused] = useState(false);
+  const [seekDelta, setSeekDelta] = useState(0);
+  const [frameProgress, setFrameProgress] = useState({ current: 0, total: 1, fps: 0 });
+
   useEffect(() => {
     if (!basePath) {
       setFileList([]);
@@ -161,11 +166,23 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
       return;
     }
     if (key.leftArrow) {
-      setCurrentPage(prev => Math.max(0, prev - 1));
+      if (isPaused) {
+        setSeekDelta(-1); // 일시정지 중: 이전 프레임
+      } else {
+        setCurrentPage(prev => Math.max(0, prev - 1));
+      }
       return;
     }
     if (key.rightArrow) {
-      setCurrentPage(prev => Math.min(totalPages - 1, prev + 1));
+      if (isPaused) {
+        setSeekDelta(1); // 일시정지 중: 다음 프레임
+      } else {
+        setCurrentPage(prev => Math.min(totalPages - 1, prev + 1));
+      }
+      return;
+    }
+    if (input === ' ') {
+      setIsPaused(prev => !prev);
       return;
     }
     if (input.toLowerCase() === 'm') {
@@ -289,6 +306,10 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
     }
   };
 
+  const handleFrameUpdate = (frame: number, totalFrames: number, fps: number) => {
+    setFrameProgress({ current: Math.floor(frame), total: totalFrames, fps });
+  };
+
   const previewWidth = Math.max(20, Math.floor((termSize.columns - 2) * 0.72) - 4);
   const previewHeight = Math.max(10, termSize.rows - 6);
 
@@ -381,8 +402,9 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
 
         {/* RIGHT PANEL: Preview Only */}
         <Box width="75%" flexDirection="column" marginLeft={1} borderStyle="single" paddingX={1}>
-          <Box>
-            <Text bold color="yellow">Live Preview</Text>
+          <Box justifyContent="space-between">
+            <Text bold color="yellow">Live Preview {isPaused ? <Text color="red"> ⏸ PAUSED</Text> : <Text color="green"> ▶</Text>}</Text>
+            <Text color="gray">{frameProgress.current}/{frameProgress.total} <Text color={frameProgress.fps >= 25 ? 'green' : frameProgress.fps >= 15 ? 'yellow' : 'red'}>{frameProgress.fps}fps</Text> <Text color="cyan">Space:⏯ </Text>{isPaused ? <Text color="yellow">←→:Seek</Text> : null}</Text>
           </Box>
           {selectedFile && selectedFile.value !== '' && !selectedFile.value.startsWith('__folder__') ? (
             <LottiePlayer 
@@ -394,6 +416,10 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
               renderMode={settingsMode}
               invertDark={invertDark}
               onLoad={handleDurationLoad}
+              paused={isPaused}
+              seekDelta={seekDelta}
+              onSeekConsumed={() => setSeekDelta(0)}
+              onFrameUpdate={handleFrameUpdate}
             />
           ) : (
             <Text color="gray">No file selected to preview.</Text>

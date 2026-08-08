@@ -32,6 +32,8 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
   const [currentPage, setCurrentPage] = useState(0);
   const [isInputMode, setIsInputMode] = useState(false);
   const [inputPath, setInputPath] = useState('');
+  const [isLocalSearchMode, setIsLocalSearchMode] = useState(false);
+  const [localSearchQuery, setLocalSearchQuery] = useState('');
 
   // ─── 재생 제어 ───
   const [isPaused, setIsPaused] = useState(false);
@@ -44,18 +46,21 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
     setSelectedFile(newFile);
   }, scanner.basePath);
 
-  // ─── 레이아웃 계산 ───
+  // ─── 레이아웃 및 필터링 ───
+  const displayFileList = scanner.fileList.filter(f => f.value.toLowerCase().includes(localSearchQuery.toLowerCase()));
   const pageSize = Math.min(15, Math.max(5, termSize.rows - 17));
-  const totalPages = Math.ceil(scanner.fileList.length / pageSize) || 1;
+  const totalPages = Math.ceil(displayFileList.length / pageSize) || 1;
   const leftPanelCols = Math.floor(termSize.columns * 0.30) - 4;
   const previewWidth = Math.max(20, Math.floor((termSize.columns - 2) * 0.68) - 4);
   const previewHeight = Math.max(10, termSize.rows - 6);
 
   // ─── 키보드 핸들러 ───
   useInput((input, key) => {
-    if (isInputMode || mcp.searchMode) {
+    if (isInputMode || mcp.searchMode || isLocalSearchMode) {
       if (key.escape) {
         setIsInputMode(false);
+        setIsLocalSearchMode(false);
+        if (isLocalSearchMode) setLocalSearchQuery('');
         mcp.closeSearch();
       }
       return;
@@ -73,7 +78,7 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
       setSettingsMode(prev => prev === 'half-block' ? 'quadrant' : prev === 'quadrant' ? 'braille' : 'half-block');
     }
     if (input.toLowerCase() === 'd') { setInvertDark(prev => !prev); }
-    if (input.toLowerCase() === 's') { scanner.setScanDepth(prev => prev + 1); }
+    if (input.toLowerCase() === 's') { setIsLocalSearchMode(true); }
     if (input.toLowerCase() === 'o') { setInputPath(scanner.basePath); setIsInputMode(true); }
     if (input.toLowerCase() === 'l') { mcp.openSearch(); }
   });
@@ -106,7 +111,7 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
       <Box flexDirection="row">
         <LeftPanel
           selectedFile={selectedFile}
-          fileList={scanner.fileList}
+          fileList={displayFileList}
           currentPage={currentPage}
           pageSize={pageSize}
           totalPages={totalPages}
@@ -118,9 +123,14 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
           onInputPathChange={setInputPath}
           onInputSubmit={(val) => {
             scanner.setBasePath(val);
-            scanner.setScanDepth(5);
+            scanner.setScanDepth(1);
             setIsInputMode(false);
+            setLocalSearchQuery('');
           }}
+          isLocalSearchMode={isLocalSearchMode}
+          localSearchQuery={localSearchQuery}
+          onLocalSearchQueryChange={setLocalSearchQuery}
+          onLocalSearchSubmit={() => setIsLocalSearchMode(false)}
           searchMode={mcp.searchMode}
           searchQuery={mcp.searchQuery}
           onSearchQueryChange={mcp.setSearchQuery}

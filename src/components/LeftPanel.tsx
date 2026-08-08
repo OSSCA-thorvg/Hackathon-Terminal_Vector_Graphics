@@ -22,6 +22,11 @@ interface LeftPanelProps {
   inputPath: string;
   onInputPathChange: (val: string) => void;
   onInputSubmit: (val: string) => void;
+  // 로컬 검색 모드
+  isLocalSearchMode: boolean;
+  localSearchQuery: string;
+  onLocalSearchQueryChange: (val: string) => void;
+  onLocalSearchSubmit: () => void;
   // 검색 모드
   searchMode: boolean;
   searchQuery: string;
@@ -54,6 +59,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
   selectedFile, fileList, currentPage, pageSize, totalPages, basePath,
   settingsMode, invertDark,
   isInputMode, inputPath, onInputPathChange, onInputSubmit,
+  isLocalSearchMode, localSearchQuery, onLocalSearchQueryChange, onLocalSearchSubmit,
   searchMode, searchQuery, onSearchQueryChange, onSearchSubmit,
   searchStatus, searchResults, onSearchSelect,
   onHighlight, onSelect,
@@ -124,6 +130,16 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
           />
           <Text color="gray">(Enter to apply, ESC cancel)</Text>
         </Box>
+      ) : isLocalSearchMode ? (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text color="green" bold>🔍 현재 폴더 검색:</Text>
+          <TextInput
+            value={localSearchQuery}
+            onChange={onLocalSearchQueryChange}
+            onSubmit={onLocalSearchSubmit}
+          />
+          <Text color="gray">(ESC:취소, Enter:완료)</Text>
+        </Box>
       ) : !basePath ? (
         <Box flexDirection="column">
           <Text color="gray">O 키를 눌러 경로를 지정하세요</Text>
@@ -149,7 +165,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
           <>
             <Text color="cyan">Page {currentPage + 1}/{totalPages} ({fileList.length})</Text>
             <Text color="gray">↑↓ browse ←→ pages</Text>
-            <Text color="green">S:Scan <Text color="magenta">L:LottieFiles</Text></Text>
+            <Text color="green">S:Search <Text color="magenta">L:LottieFiles</Text></Text>
           </>
         ) : (
           <Text color="gray" dimColor>ThorVG Terminal Player</Text>

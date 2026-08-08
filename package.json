@@ -1,7 +1,7 @@
 {
-  "name": "thorvg-terminal-react",
+  "name": "termvg",
   "version": "1.0.0",
-  "description": "React Ink implementation for ThorVG terminal rendering",
+  "description": "Terminal Vector Graphics Player — Render Lottie/SVG animations in the terminal using ThorVG + WebAssembly",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -9,12 +9,39 @@
   },
   "files": [
     "dist",
-    "termvg.cjs",
-    "termvg.wasm"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "start": "tsx src/index.tsx",
-    "build": "tsc && cp src/termvg.cjs src/termvg.wasm dist/ 2>/dev/null && chmod +x dist/index.js || true"
+    "build": "tsc && cp src/termvg.cjs src/termvg.wasm dist/ 2>/dev/null && chmod +x dist/index.js || true",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "terminal",
+    "lottie",
+    "svg",
+    "animation",
+    "thorvg",
+    "wasm",
+    "webassembly",
+    "cli",
+    "ascii-art",
+    "braille",
+    "react-ink"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OSSCA-thorvg/Hackathon-Terminal_Vector_Graphics.git"
+  },
+  "homepage": "https://ossca-thorvg.github.io/Hackathon-Terminal_Vector_Graphics/",
+  "bugs": {
+    "url": "https://github.com/OSSCA-thorvg/Hackathon-Terminal_Vector_Graphics/issues"
+  },
+  "license": "MIT",
+  "author": "OSSCA ThorVG Hackathon Team",
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -34,3 +61,4 @@
     "typescript": "^5.0.0"
   }
 }
+

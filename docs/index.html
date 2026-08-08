@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TermVG — Terminal Vector Graphics Player</title>
-  <meta name="description" content="ThorVG 기반 터미널 벡터 그래픽 플레이어. 브라우저에서 바로 체험하세요." />
+  <title>TermVG — Terminal Vector Graphics Demo</title>
+  <meta name="description" content="브라우저에서 ThorVG WASM 엔진으로 Lottie/SVG를 터미널 렌더링합니다." />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -14,7 +14,9 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.min.js"></script>
+
+  <!-- TermVG WASM (browser-patched) -->
+  <script src="termvg-browser.js"></script>
 
   <style>
     :root {
@@ -28,330 +30,137 @@
       --orange: #f0883e;
       --red: #f85149;
       --purple: #bc8cff;
-      --panel-width: 280px;
+      --panel-width: 300px;
     }
-
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); overflow: hidden; }
 
-    html, body {
-      width: 100%; height: 100%;
-      font-family: 'Inter', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      overflow: hidden;
-    }
+    .app { display: flex; width: 100%; height: 100%; }
 
-    /* ── Layout ── */
-    .app {
-      display: flex;
-      width: 100%; height: 100%;
-    }
-
-    /* ── Terminal Area ── */
-    .terminal-area {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-    }
+    /* Terminal */
+    .terminal-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
     .terminal-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 16px;
-      background: var(--bg-panel);
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; background: var(--bg-panel);
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
     }
-    .terminal-dots {
-      display: flex; gap: 6px;
-    }
+    .terminal-dots { display: flex; gap: 6px; }
     .dot { width: 12px; height: 12px; border-radius: 50%; }
-    .dot-r { background: var(--red); }
-    .dot-y { background: var(--orange); }
-    .dot-g { background: var(--green); }
-    .terminal-title {
-      flex: 1;
-      text-align: center;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.8rem;
-      color: var(--text-dim);
-    }
-    .status-badge {
-      padding: 3px 10px;
-      border-radius: 12px;
-      font-size: 0.7rem;
-      font-weight: 600;
-    }
-    .status-connecting { background: rgba(248,177,62,0.15); color: var(--orange); }
-    .status-connected { background: rgba(63,185,80,0.15); color: var(--green); }
-    .status-disconnected { background: rgba(248,81,73,0.15); color: var(--red); }
+    .dot-r { background: var(--red); } .dot-y { background: var(--orange); } .dot-g { background: var(--green); }
+    .terminal-title { flex: 1; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--text-dim); }
+    .status-badge { padding: 3px 10px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; }
+    .status-ok { background: rgba(63,185,80,0.15); color: var(--green); }
+    .status-loading { background: rgba(248,177,62,0.15); color: var(--orange); }
+    .status-error { background: rgba(248,81,73,0.15); color: var(--red); }
 
-    #terminal-container {
-      flex: 1;
-      padding: 4px;
-      background: var(--bg);
-    }
+    #terminal-container { flex: 1; background: var(--bg); overflow: hidden; }
     #terminal-container .xterm { height: 100%; }
 
-    /* ── Overlay (Connection Form) ── */
-    .overlay {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(13,17,23,0.92);
-      z-index: 10;
-      transition: opacity 0.3s;
+    /* Drop overlay */
+    .drop-overlay {
+      position: absolute; inset: 0; z-index: 20;
+      background: rgba(88,166,255,0.08);
+      border: 3px dashed var(--cyan);
+      display: none; align-items: center; justify-content: center;
     }
-    .overlay.hidden { opacity: 0; pointer-events: none; }
-    .connect-box {
-      text-align: center;
-      max-width: 440px;
-      padding: 48px 36px;
-      background: var(--bg-panel);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-    }
-    .connect-box h2 {
-      font-size: 1.5rem;
-      margin-bottom: 8px;
-    }
-    .connect-box .subtitle {
-      color: var(--text-dim);
-      font-size: 0.9rem;
-      margin-bottom: 28px;
-    }
-    .connect-box .error-msg {
-      color: var(--red);
-      font-size: 0.85rem;
-      margin-bottom: 16px;
-      min-height: 20px;
-    }
-    .input-row {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-    .input-row input {
-      flex: 1;
-      padding: 12px 16px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      color: var(--text);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.9rem;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    .input-row input:focus { border-color: var(--cyan); }
-    .input-row input::placeholder { color: var(--text-dim); }
-    .btn {
-      padding: 12px 24px;
-      border: none;
-      border-radius: 10px;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .btn-primary { background: var(--cyan); color: #0d1117; }
-    .btn-primary:hover { background: #79c0ff; transform: translateY(-1px); }
-    .hint {
-      font-size: 0.78rem;
-      color: var(--text-dim);
-    }
-    .hint code {
-      background: var(--bg);
-      padding: 2px 7px;
-      border-radius: 4px;
-      font-family: 'JetBrains Mono', monospace;
-      color: var(--orange);
-    }
+    .drop-overlay.active { display: flex; }
+    .drop-overlay span { font-size: 1.5rem; color: var(--cyan); font-weight: 700; }
 
-    /* ── Side Panel ── */
+    /* Side Panel */
     .side-panel {
-      width: var(--panel-width);
-      flex-shrink: 0;
-      background: var(--bg-panel);
-      border-left: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      overflow-y: auto;
+      width: var(--panel-width); flex-shrink: 0;
+      background: var(--bg-panel); border-left: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow-y: auto;
     }
-    .panel-header {
-      padding: 14px 20px;
-      border-bottom: 1px solid var(--border);
-      font-weight: 700;
-      font-size: 0.9rem;
-      color: var(--cyan);
+    .panel-header { padding: 14px 20px; border-bottom: 1px solid var(--border); font-weight: 700; font-size: 0.9rem; color: var(--cyan); }
+    .panel-section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .panel-section h3 { font-size: 0.78rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+
+    .file-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+    .file-item {
+      padding: 8px 12px; border-radius: 8px; cursor: pointer;
+      font-size: 0.82rem; font-family: 'JetBrains Mono', monospace;
+      color: var(--text-dim); transition: all 0.15s; display: flex; align-items: center; gap: 8px;
     }
-    .panel-section {
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--border);
-    }
-    .panel-section h3 {
-      font-size: 0.8rem;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 12px;
-    }
-    .shortcut-list {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .shortcut-list li {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 0.85rem;
-    }
+    .file-item:hover { background: rgba(88,166,255,0.08); color: var(--text); }
+    .file-item.active { background: rgba(88,166,255,0.15); color: var(--cyan); border: 1px solid rgba(88,166,255,0.3); }
+    .file-type { font-size: 0.7rem; padding: 1px 6px; border-radius: 3px; font-weight: 700; flex-shrink: 0; }
+    .type-lottie { background: rgba(63,185,80,0.15); color: var(--green); }
+    .type-svg { background: rgba(188,140,255,0.15); color: var(--purple); }
+
+    .shortcut-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .shortcut-list li { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; }
     .key {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 28px;
-      height: 26px;
-      padding: 0 8px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.75rem;
-      color: var(--cyan);
-      flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 28px; height: 26px; padding: 0 8px;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 5px;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--cyan); flex-shrink: 0;
     }
     .shortcut-desc { color: var(--text-dim); }
 
-    .panel-section.about p {
-      font-size: 0.82rem;
-      color: var(--text-dim);
-      line-height: 1.6;
-      margin-bottom: 12px;
-    }
-    .panel-section.about a {
-      color: var(--cyan);
-      text-decoration: none;
-    }
-    .panel-section.about a:hover { text-decoration: underline; }
-
-    .mode-list {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .mode-list li {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 0.82rem;
-      color: var(--text-dim);
-    }
-    .mode-tag {
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.72rem;
-      font-weight: 700;
-    }
+    .mode-list { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+    .mode-list li { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--text-dim); }
+    .mode-tag { padding: 2px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 700; }
     .mode-hb { background: rgba(88,166,255,0.12); color: var(--cyan); }
     .mode-qd { background: rgba(188,140,255,0.12); color: var(--purple); }
     .mode-br { background: rgba(63,185,80,0.12); color: var(--green); }
 
-    /* ── Toggle button ── */
+    .info-text { font-size: 0.82rem; color: var(--text-dim); line-height: 1.6; margin-bottom: 10px; }
+    .info-text a { color: var(--cyan); text-decoration: none; }
+    .info-text a:hover { text-decoration: underline; }
+
+    .playback-info {
+      padding: 10px 20px; border-top: 1px solid var(--border);
+      font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;
+      color: var(--text-dim); flex-shrink: 0;
+    }
+    .playback-info .fps { font-weight: 700; }
+    .fps-good { color: var(--green); }
+    .fps-mid { color: var(--orange); }
+    .fps-bad { color: var(--red); }
+
+    /* Panel toggle */
     .panel-toggle {
-      position: absolute;
-      right: var(--panel-width);
-      top: 50%;
-      transform: translateY(-50%);
-      width: 20px;
-      height: 60px;
-      background: var(--bg-panel);
-      border: 1px solid var(--border);
-      border-right: none;
-      border-radius: 8px 0 0 8px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-dim);
-      font-size: 0.7rem;
-      z-index: 5;
-      transition: right 0.3s ease;
+      position: absolute; right: var(--panel-width); top: 50%; transform: translateY(-50%);
+      width: 20px; height: 60px; background: var(--bg-panel);
+      border: 1px solid var(--border); border-right: none;
+      border-radius: 8px 0 0 8px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-dim); font-size: 0.7rem; z-index: 5; transition: right 0.3s ease;
     }
     .panel-toggle:hover { background: var(--bg); color: var(--text); }
     .app.panel-collapsed .side-panel { display: none; }
     .app.panel-collapsed .panel-toggle { right: 0; }
 
-    /* ── Mobile ── */
-    @media (max-width: 768px) {
-      .side-panel { display: none; }
-      .panel-toggle { display: none; }
-    }
+    @media (max-width: 768px) { .side-panel { display: none; } .panel-toggle { display: none; } }
   </style>
 </head>
 <body>
   <div class="app" id="app">
-    <!-- Terminal -->
     <div class="terminal-area" style="position: relative;">
       <div class="terminal-header">
-        <div class="terminal-dots">
-          <div class="dot dot-r"></div>
-          <div class="dot dot-y"></div>
-          <div class="dot dot-g"></div>
-        </div>
-        <span class="terminal-title">🚀 TermVG — Terminal Vector Graphics Player</span>
-        <span class="status-badge status-connecting" id="status-badge">연결 중...</span>
+        <div class="terminal-dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+        <span class="terminal-title">🚀 TermVG — Browser WASM Demo</span>
+        <span class="status-badge status-loading" id="status-badge">WASM 로딩 중...</span>
       </div>
       <div id="terminal-container"></div>
-
-      <!-- Connection Overlay -->
-      <div class="overlay" id="overlay">
-        <div class="connect-box">
-          <h2>🚀 TermVG Web Terminal</h2>
-          <p class="subtitle">ttyd 서버에 접속하여 터미널을 시작합니다</p>
-          <div class="error-msg" id="error-msg"></div>
-          <div class="input-row">
-            <input type="text" id="server-url" placeholder="http://your-server:8080" />
-            <button class="btn btn-primary" id="connect-btn" onclick="doConnect()">접속</button>
-          </div>
-          <p class="hint">
-            서버에서 먼저 실행하세요:<br/>
-            <code>npx tsx src/index.tsx web</code>
-          </p>
-        </div>
-      </div>
+      <div class="drop-overlay" id="drop-overlay"><span>📂 파일을 여기에 드롭하세요</span></div>
     </div>
 
-    <!-- Side Panel Toggle -->
     <div class="panel-toggle" id="panel-toggle" onclick="togglePanel()">◀</div>
 
-    <!-- Side Panel -->
     <div class="side-panel">
-      <div class="panel-header">📖 사용 가이드</div>
+      <div class="panel-header">🚀 TermVG Demo</div>
 
       <div class="panel-section">
-        <h3>🗂 파일 탐색</h3>
-        <ul class="shortcut-list">
-          <li><span class="key">O</span><span class="shortcut-desc">폴더 경로 열기</span></li>
-          <li><span class="key">↑↓</span><span class="shortcut-desc">파일 탐색</span></li>
-          <li><span class="key">←→</span><span class="shortcut-desc">페이지 넘기기</span></li>
-          <li><span class="key">S</span><span class="shortcut-desc">파일 검색</span></li>
-          <li><span class="key">Enter</span><span class="shortcut-desc">파일 선택/재생</span></li>
-        </ul>
+        <h3>📂 샘플 파일</h3>
+        <ul class="file-list" id="file-list"></ul>
       </div>
 
       <div class="panel-section">
         <h3>▶ 재생 제어</h3>
         <ul class="shortcut-list">
-          <li><span class="key">Space</span><span class="shortcut-desc">재생/일시정지</span></li>
+          <li><span class="key">Space</span><span class="shortcut-desc">재생 / 일시정지</span></li>
           <li><span class="key">←→</span><span class="shortcut-desc">프레임 시크 (정지 중)</span></li>
         </ul>
       </div>
@@ -362,7 +171,7 @@
           <li><span class="key">M</span><span class="shortcut-desc">렌더 모드 전환</span></li>
           <li><span class="key">D</span><span class="shortcut-desc">다크 모드 전환</span></li>
         </ul>
-        <ul class="mode-list" style="margin-top: 10px;">
+        <ul class="mode-list">
           <li><span class="mode-tag mode-hb">HB</span> Half-block (1×2)</li>
           <li><span class="mode-tag mode-qd">QD</span> Quadrant (2×2)</li>
           <li><span class="mode-tag mode-br">BR</span> Braille (2×4)</li>
@@ -370,237 +179,373 @@
       </div>
 
       <div class="panel-section">
-        <h3>🌐 LottieFiles</h3>
-        <ul class="shortcut-list">
-          <li><span class="key">L</span><span class="shortcut-desc">LottieFiles 검색</span></li>
-          <li><span class="key">ESC</span><span class="shortcut-desc">검색 취소</span></li>
-        </ul>
+        <h3>📤 파일 업로드</h3>
+        <p class="info-text">Lottie JSON 또는 SVG 파일을<br/>터미널 영역에 드래그 앤 드롭하세요.</p>
       </div>
 
-      <div class="panel-section about">
+      <div class="panel-section">
         <h3>ℹ️ About</h3>
-        <p>
+        <p class="info-text">
           <strong>TermVG</strong>는 ThorVG C++ 엔진을 WebAssembly로 컴파일하여
-          터미널에서 Lottie/SVG를 30fps로 실시간 렌더링하는 플레이어입니다.
+          터미널에서 Lottie/SVG를 렌더링하는 플레이어입니다.
         </p>
-        <p>
-          <a href="https://github.com/OSSCA-thorvg/Hackathon-Terminal_Vector_Graphics" target="_blank">📦 GitHub Repository</a><br/>
-          <a href="https://www.thorvg.org" target="_blank">🔧 ThorVG Engine</a>
+        <p class="info-text">
+          <a href="https://github.com/OSSCA-thorvg/Hackathon-Terminal_Vector_Graphics" target="_blank">📦 GitHub</a> · 
+          <a href="https://www.thorvg.org" target="_blank">🔧 ThorVG</a>
         </p>
+      </div>
+
+      <div class="playback-info" id="playback-info">
+        대기 중
       </div>
     </div>
   </div>
 
   <script>
-    // ── Config ──
-    const DEFAULT_SERVER = ''; // Set default ttyd server URL here, e.g., 'http://your-server:8080'
+    // ── Sample Files ──
+    const SAMPLES = [
+      { name: '🎆 Fireworks', file: 'assets/5317-fireworkds.json', type: 'lottie' },
+      { name: '⏳ Loading Spinner', file: 'assets/43391.json', type: 'lottie' },
+      { name: '🎬 Animation', file: 'assets/week02-example01.json', type: 'lottie' },
+      { name: '🖼️ SVG Graphic 1', file: 'assets/1528966158.svg', type: 'svg' },
+      { name: '🖼️ SVG Graphic 2', file: 'assets/2961.svg', type: 'svg' },
+      { name: '🖼️ ThorVG Logo', file: 'assets/421553147-22eaf24a-a9a7-4a35-abac-df5a54ac5b19.svg', type: 'svg' },
+    ];
+
+    const RENDER_MODES = ['half-block', 'quadrant', 'braille'];
+    const MODE_PIXEL = {
+      'half-block': (w, h) => ({ pw: w, ph: h * 2 }),
+      'quadrant':   (w, h) => ({ pw: w * 2, ph: h * 2 }),
+      'braille':    (w, h) => ({ pw: w * 2, ph: h * 4 }),
+    };
 
     // ── State ──
     let term = null;
-    let ws = null;
     let fitAddon = null;
+    let engine = null;
+    let wasmReady = false;
 
-    // ── Initialize Terminal ──
+    let currentFile = null;
+    let renderModeIdx = 1; // quadrant
+    let invertDark = false;
+    let paused = false;
+    let currentFrame = 0;
+    let totalFrames = 1;
+    let duration = 0;
+    let animationId = null;
+    let lastFrameTime = 0;
+    let fpsCount = 0;
+    let fpsValue = 0;
+    let fpsTimer = null;
+    let prevAnsi = '';
+
+    const TARGET_FPS = 30;
+    const FRAME_MS = 1000 / TARGET_FPS;
+
+    // ── Init ──
+    async function init() {
+      initTerminal();
+      renderFileList();
+      setupDragDrop();
+      await initWasm();
+    }
+
     function initTerminal() {
       term = new window.Terminal({
-        fontFamily: "'JetBrains Mono', 'Menlo', 'DejaVu Sans Mono', monospace",
+        fontFamily: "'JetBrains Mono', 'Menlo', monospace",
         fontSize: 14,
-        lineHeight: 1.1,
+        lineHeight: 1.0,
         theme: {
-          background: '#0d1117',
-          foreground: '#e6edf3',
-          cursor: '#58a6ff',
-          cursorAccent: '#0d1117',
-          selectionBackground: 'rgba(88,166,255,0.3)',
-          black: '#484f58',
-          red: '#ff7b72',
-          green: '#3fb950',
-          yellow: '#d29922',
-          blue: '#58a6ff',
-          magenta: '#bc8cff',
-          cyan: '#39d353',
-          white: '#b1bac4',
-          brightBlack: '#6e7681',
-          brightRed: '#ffa198',
-          brightGreen: '#56d364',
-          brightYellow: '#e3b341',
-          brightBlue: '#79c0ff',
-          brightMagenta: '#d2a8ff',
-          brightCyan: '#56d364',
-          brightWhite: '#f0f6fc',
+          background: '#0d1117', foreground: '#e6edf3', cursor: '#58a6ff',
+          black: '#484f58', red: '#ff7b72', green: '#3fb950', yellow: '#d29922',
+          blue: '#58a6ff', magenta: '#bc8cff', cyan: '#39d353', white: '#b1bac4',
+          brightBlack: '#6e7681', brightRed: '#ffa198', brightGreen: '#56d364',
+          brightYellow: '#e3b341', brightBlue: '#79c0ff', brightMagenta: '#d2a8ff',
+          brightCyan: '#56d364', brightWhite: '#f0f6fc',
         },
-        cursorBlink: true,
-        allowProposedApi: true,
+        cursorBlink: false,
+        disableStdin: true,
+        convertEol: true,
       });
 
       fitAddon = new window.FitAddon.FitAddon();
       term.loadAddon(fitAddon);
-      term.loadAddon(new window.WebLinksAddon.WebLinksAddon());
 
       const container = document.getElementById('terminal-container');
       term.open(container);
       fitAddon.fit();
 
       window.addEventListener('resize', () => {
-        if (fitAddon) fitAddon.fit();
-        sendResize();
+        fitAddon.fit();
+        if (currentFile && wasmReady) reloadCurrentFile();
       });
 
-      // Try auto-connect
-      const urlInput = document.getElementById('server-url');
-      if (DEFAULT_SERVER) {
-        urlInput.value = DEFAULT_SERVER;
-        doConnect();
-      } else {
-        // Check URL params
-        const params = new URLSearchParams(window.location.search);
-        const serverParam = params.get('server');
-        if (serverParam) {
-          urlInput.value = serverParam;
-          doConnect();
-        }
-      }
+      term.writeln('\x1b[36m🚀 TermVG — Terminal Vector Graphics Player\x1b[0m');
+      term.writeln('\x1b[90m   Powered by ThorVG + WebAssembly\x1b[0m');
+      term.writeln('');
+      term.writeln('\x1b[33m⏳ WASM 엔진 로딩 중...\x1b[0m');
     }
 
-    // ── Connect to ttyd ──
-    function doConnect() {
-      const urlInput = document.getElementById('server-url');
-      const errorMsg = document.getElementById('error-msg');
-      let baseUrl = urlInput.value.trim();
-
-      if (!baseUrl) {
-        errorMsg.textContent = 'URL을 입력하세요';
-        return;
-      }
-
-      // Normalize URL
-      baseUrl = baseUrl.replace(/\/+$/, '');
-
-      // Build WebSocket URL
-      // ttyd serves websocket at /ws
-      let wsUrl;
+    async function initWasm() {
       try {
-        const parsed = new URL(baseUrl);
-        const wsProtocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
-        wsUrl = `${wsProtocol}//${parsed.host}${parsed.pathname}/ws`;
-      } catch {
-        errorMsg.textContent = '유효한 URL을 입력하세요 (예: http://server:8080)';
-        return;
-      }
-
-      errorMsg.textContent = '';
-      setStatus('connecting');
-
-      // Close existing connection
-      if (ws) {
-        ws.close();
-        ws = null;
-      }
-
-      term.clear();
-      term.writeln('\x1b[36m⏳ 서버에 접속 중...\x1b[0m');
-      term.writeln(`\x1b[90m   ${wsUrl}\x1b[0m`);
-      term.writeln('');
-
-      ws = new WebSocket(wsUrl);
-      ws.binaryType = 'arraybuffer';
-
-      ws.onopen = () => {
-        setStatus('connected');
-        hideOverlay();
-        term.clear();
-        term.focus();
-
-        // Send initial terminal size
-        sendResize();
-
-        // Handle terminal input → server
-        term.onData((data) => {
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            // ttyd protocol: first byte 0 = input
-            const buf = new Uint8Array(data.length + 1);
-            buf[0] = 0; // input type
-            for (let i = 0; i < data.length; i++) {
-              buf[i + 1] = data.charCodeAt(i);
-            }
-            ws.send(buf.buffer);
+        const Module = await window.createTermVG({
+          locateFile: (path) => {
+            if (path.endsWith('.wasm')) return 'termvg.wasm';
+            return path;
           }
         });
-      };
+        engine = new Module.TermVGEngine();
+        engine.init();
+        wasmReady = true;
 
-      ws.onmessage = (event) => {
-        if (event.data instanceof ArrayBuffer) {
-          const data = new Uint8Array(event.data);
-          // ttyd protocol: first byte indicates message type
-          // 0 = output, 1 = set window title, 2 = set preferences
-          if (data[0] === 0) {
-            // Output data
-            const text = new TextDecoder().decode(data.slice(1));
-            term.write(text);
-          } else if (data[0] === 1) {
-            // Window title
-            const title = new TextDecoder().decode(data.slice(1));
-            document.querySelector('.terminal-title').textContent = '🚀 ' + title;
-          }
-        }
-      };
-
-      ws.onerror = () => {
-        setStatus('disconnected');
-        showOverlay('접속 실패. 서버가 실행 중인지 확인하세요.');
-      };
-
-      ws.onclose = (event) => {
-        setStatus('disconnected');
-        if (!event.wasClean) {
-          showOverlay('연결이 끊어졌습니다. 서버를 확인 후 다시 접속하세요.');
-        } else {
-          showOverlay('세션이 종료되었습니다.');
-        }
+        setStatus('ready');
+        term.clear();
+        term.writeln('\x1b[32m✅ WASM 엔진 로드 완료!\x1b[0m');
         term.writeln('');
-        term.writeln('\x1b[31m⚠ 연결 종료\x1b[0m');
-      };
+        term.writeln('\x1b[90m   사이드 패널에서 샘플 파일을 선택하거나,\x1b[0m');
+        term.writeln('\x1b[90m   Lottie/SVG 파일을 드래그 앤 드롭하세요.\x1b[0m');
+        term.writeln('');
+        term.writeln('\x1b[36m   Space: 재생/정지  M: 렌더모드  D: 다크모드\x1b[0m');
+
+        // Keyboard handler
+        document.addEventListener('keydown', handleKeydown);
+      } catch (e) {
+        setStatus('error');
+        term.writeln('');
+        term.writeln(`\x1b[31m❌ WASM 로드 실패: ${e.message}\x1b[0m`);
+        console.error(e);
+      }
     }
 
-    // ── Send terminal size to ttyd ──
-    function sendResize() {
-      if (ws && ws.readyState === WebSocket.OPEN && term) {
-        // ttyd protocol: type 1 = resize, followed by JSON
-        const msg = JSON.stringify({ columns: term.cols, rows: term.rows });
-        const buf = new Uint8Array(msg.length + 1);
-        buf[0] = 1; // resize type
-        for (let i = 0; i < msg.length; i++) {
-          buf[i + 1] = msg.charCodeAt(i);
-        }
-        ws.send(buf.buffer);
+    // ── File Loading ──
+    async function loadFile(name, content) {
+      if (!wasmReady) return;
+      stopAnimation();
+
+      currentFile = name;
+      currentFrame = 0;
+      prevAnsi = '';
+
+      // Compute terminal size → pixel size
+      const mode = RENDER_MODES[renderModeIdx];
+      const { pw, ph } = MODE_PIXEL[mode](term.cols, term.rows - 2);
+
+      engine.setSize(pw, ph);
+      const res = engine.load(content);
+      if (res !== 0) {
+        term.clear();
+        term.writeln(`\x1b[31m❌ 파일 로드 실패 (code: ${res})\x1b[0m`);
+        return;
       }
+
+      totalFrames = Math.max(1, engine.getTotalFrames());
+      duration = engine.getDuration();
+
+      // FPS counter
+      if (fpsTimer) clearInterval(fpsTimer);
+      fpsTimer = setInterval(() => { fpsValue = fpsCount; fpsCount = 0; }, 1000);
+
+      paused = false;
+      startAnimation();
+      highlightActiveFile(name);
+    }
+
+    async function loadSample(sample) {
+      setStatus('loading');
+      try {
+        const res = await fetch(sample.file);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const content = await res.text();
+        await loadFile(sample.name, content);
+        setStatus('ready');
+      } catch (e) {
+        setStatus('error');
+        term.clear();
+        term.writeln(`\x1b[31m❌ 파일 로드 실패: ${e.message}\x1b[0m`);
+      }
+    }
+
+    function reloadCurrentFile() {
+      // Re-render with new size (for window resize / mode change)
+      if (!wasmReady || !currentFile) return;
+      const mode = RENDER_MODES[renderModeIdx];
+      const { pw, ph } = MODE_PIXEL[mode](term.cols, term.rows - 2);
+      engine.setSize(pw, ph);
+    }
+
+    // ── Animation Loop ──
+    function startAnimation() {
+      if (animationId) return;
+      lastFrameTime = performance.now();
+      animationId = requestAnimationFrame(tick);
+    }
+
+    function stopAnimation() {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+      }
+      if (fpsTimer) { clearInterval(fpsTimer); fpsTimer = null; }
+      fpsValue = 0;
+    }
+
+    function tick(now) {
+      animationId = requestAnimationFrame(tick);
+
+      const elapsed = now - lastFrameTime;
+      if (elapsed < FRAME_MS) return;
+      lastFrameTime = now - (elapsed % FRAME_MS);
+
+      if (paused) return;
+
+      renderFrame();
+
+      // Advance frame
+      if (duration > 0) {
+        currentFrame += totalFrames / (duration * TARGET_FPS);
+        if (currentFrame >= totalFrames) currentFrame = 0; // Loop
+      }
+    }
+
+    function renderFrame() {
+      const modeInt = renderModeIdx;
+      const ansi = engine.renderToString(currentFrame, modeInt, invertDark);
+      if (!ansi) return;
+
+      // Only write if content changed
+      if (ansi !== prevAnsi) {
+        prevAnsi = ansi;
+        term.write('\x1b[H'); // Move cursor to top-left
+        term.write(ansi);
+        fpsCount++;
+      }
+
+      updatePlaybackInfo();
+    }
+
+    // ── Keyboard ──
+    function handleKeydown(e) {
+      // Ignore if typing in an input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      const key = e.key.toLowerCase();
+
+      if (key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        if (!currentFile) return;
+        paused = !paused;
+        updatePlaybackInfo();
+        return;
+      }
+
+      if (key === 'm') {
+        renderModeIdx = (renderModeIdx + 1) % RENDER_MODES.length;
+        reloadCurrentFile();
+        if (paused) renderFrame(); // Show new mode immediately
+        return;
+      }
+
+      if (key === 'd') {
+        invertDark = !invertDark;
+        if (paused) renderFrame();
+        return;
+      }
+
+      if (e.key === 'ArrowLeft' && paused && currentFile) {
+        e.preventDefault();
+        const step = totalFrames / TARGET_FPS;
+        currentFrame = Math.max(0, currentFrame - step);
+        renderFrame();
+        return;
+      }
+
+      if (e.key === 'ArrowRight' && paused && currentFile) {
+        e.preventDefault();
+        const step = totalFrames / TARGET_FPS;
+        currentFrame = Math.min(totalFrames - 1, currentFrame + step);
+        renderFrame();
+        return;
+      }
+    }
+
+    // ── Drag & Drop ──
+    function setupDragDrop() {
+      const area = document.querySelector('.terminal-area');
+      const overlay = document.getElementById('drop-overlay');
+      let dragCounter = 0;
+
+      area.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        dragCounter++;
+        overlay.classList.add('active');
+      });
+      area.addEventListener('dragleave', (e) => {
+        dragCounter--;
+        if (dragCounter === 0) overlay.classList.remove('active');
+      });
+      area.addEventListener('dragover', (e) => e.preventDefault());
+      area.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dragCounter = 0;
+        overlay.classList.remove('active');
+
+        const file = e.dataTransfer.files[0];
+        if (!file) return;
+
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (!['json', 'svg'].includes(ext)) {
+          term.writeln('\x1b[31m❌ JSON 또는 SVG 파일만 지원합니다.\x1b[0m');
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => loadFile('📤 ' + file.name, reader.result);
+        reader.readAsText(file);
+      });
     }
 
     // ── UI Helpers ──
+    function renderFileList() {
+      const list = document.getElementById('file-list');
+      list.innerHTML = SAMPLES.map((s, i) => `
+        <li class="file-item" data-idx="${i}" onclick="loadSample(SAMPLES[${i}])">
+          <span class="file-type ${s.type === 'lottie' ? 'type-lottie' : 'type-svg'}">
+            ${s.type === 'lottie' ? 'JSON' : 'SVG'}
+          </span>
+          ${s.name}
+        </li>
+      `).join('');
+    }
+
+    function highlightActiveFile(name) {
+      document.querySelectorAll('.file-item').forEach(el => {
+        const idx = parseInt(el.dataset.idx);
+        el.classList.toggle('active', SAMPLES[idx]?.name === name);
+      });
+    }
+
     function setStatus(state) {
       const badge = document.getElementById('status-badge');
       badge.className = 'status-badge';
-      if (state === 'connecting') {
-        badge.classList.add('status-connecting');
-        badge.textContent = '연결 중...';
-      } else if (state === 'connected') {
-        badge.classList.add('status-connected');
-        badge.textContent = '● 연결됨';
-      } else {
-        badge.classList.add('status-disconnected');
-        badge.textContent = '● 연결 끊김';
-      }
+      if (state === 'ready') { badge.classList.add('status-ok'); badge.textContent = '● WASM Ready'; }
+      else if (state === 'loading') { badge.classList.add('status-loading'); badge.textContent = '⏳ 로딩 중...'; }
+      else if (state === 'error') { badge.classList.add('status-error'); badge.textContent = '● 오류'; }
     }
 
-    function showOverlay(errorText) {
-      const overlay = document.getElementById('overlay');
-      const errorMsg = document.getElementById('error-msg');
-      overlay.classList.remove('hidden');
-      if (errorText) errorMsg.textContent = errorText;
-    }
+    function updatePlaybackInfo() {
+      const info = document.getElementById('playback-info');
+      if (!currentFile) { info.textContent = '대기 중'; return; }
 
-    function hideOverlay() {
-      document.getElementById('overlay').classList.add('hidden');
+      const frame = Math.floor(currentFrame);
+      const mode = RENDER_MODES[renderModeIdx].toUpperCase();
+      const pauseIcon = paused ? '⏸' : '▶';
+      const fpsClass = fpsValue >= 25 ? 'fps-good' : fpsValue >= 15 ? 'fps-mid' : 'fps-bad';
+
+      info.innerHTML = `
+        ${pauseIcon} ${frame}/${totalFrames} · 
+        <span class="fps ${fpsClass}">${fpsValue}fps</span> · 
+        ${mode} ${invertDark ? '🌙' : '☀️'}
+      `;
     }
 
     function togglePanel() {
@@ -608,16 +553,15 @@
       const toggle = document.getElementById('panel-toggle');
       app.classList.toggle('panel-collapsed');
       toggle.textContent = app.classList.contains('panel-collapsed') ? '▶' : '◀';
-      setTimeout(() => { if (fitAddon) fitAddon.fit(); sendResize(); }, 350);
+      setTimeout(() => {
+        fitAddon.fit();
+        reloadCurrentFile();
+        if (paused && currentFile) renderFrame();
+      }, 350);
     }
 
-    // Enter key
-    document.addEventListener('DOMContentLoaded', () => {
-      initTerminal();
-      document.getElementById('server-url').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') doConnect();
-      });
-    });
+    // ── Start ──
+    document.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
 </html>

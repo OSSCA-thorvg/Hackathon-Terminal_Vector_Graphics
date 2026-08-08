@@ -4,518 +4,619 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TermVG — Terminal Vector Graphics Player</title>
-  <meta name="description" content="ThorVG 기반 고성능 터미널 벡터 그래픽 플레이어. CLI에서 Lottie 애니메이션과 SVG를 30fps로 실시간 렌더링합니다." />
+  <meta name="description" content="ThorVG 기반 터미널 벡터 그래픽 플레이어. 브라우저에서 바로 체험하세요." />
 
-  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+
+  <!-- xterm.js -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.min.js"></script>
 
   <style>
     :root {
-      --bg-primary: #0d1117;
-      --bg-card: #161b22;
-      --bg-card-hover: #1c2333;
+      --bg: #0d1117;
+      --bg-panel: #161b22;
       --border: #30363d;
-      --text-primary: #e6edf3;
-      --text-secondary: #8b949e;
-      --accent-cyan: #58a6ff;
-      --accent-green: #3fb950;
-      --accent-purple: #bc8cff;
-      --accent-orange: #f0883e;
-      --accent-red: #f85149;
-      --gradient-hero: linear-gradient(135deg, #58a6ff 0%, #bc8cff 50%, #f0883e 100%);
+      --text: #e6edf3;
+      --text-dim: #8b949e;
+      --cyan: #58a6ff;
+      --green: #3fb950;
+      --orange: #f0883e;
+      --red: #f85149;
+      --purple: #bc8cff;
+      --panel-width: 280px;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      line-height: 1.6;
-      overflow-x: hidden;
+    html, body {
+      width: 100%; height: 100%;
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
     }
-
-    /* ── Animated Background ── */
-    .bg-grid {
-      position: fixed;
-      inset: 0;
-      background-image:
-        linear-gradient(rgba(88,166,255,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(88,166,255,0.03) 1px, transparent 1px);
-      background-size: 60px 60px;
-      z-index: 0;
-    }
-
-    .bg-glow {
-      position: fixed;
-      width: 600px; height: 600px;
-      border-radius: 50%;
-      filter: blur(150px);
-      opacity: 0.15;
-      z-index: 0;
-      pointer-events: none;
-    }
-    .bg-glow-1 { top: -200px; left: -100px; background: var(--accent-cyan); }
-    .bg-glow-2 { bottom: -200px; right: -100px; background: var(--accent-purple); }
 
     /* ── Layout ── */
-    .container {
-      position: relative;
-      z-index: 1;
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 0 24px;
-    }
-
-    /* ── Header ── */
-    header {
-      padding: 20px 0;
-      border-bottom: 1px solid var(--border);
-    }
-    header .container {
+    .app {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .logo {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 1.2rem;
-      font-weight: 700;
-      color: var(--accent-cyan);
-      text-decoration: none;
-    }
-    .logo span { color: var(--text-secondary); font-weight: 400; }
-    .nav-links { display: flex; gap: 20px; }
-    .nav-links a {
-      color: var(--text-secondary);
-      text-decoration: none;
-      font-size: 0.9rem;
-      transition: color 0.2s;
-    }
-    .nav-links a:hover { color: var(--text-primary); }
-
-    /* ── Hero ── */
-    .hero {
-      text-align: center;
-      padding: 100px 0 60px;
-    }
-    .hero-badge {
-      display: inline-block;
-      padding: 6px 16px;
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      font-size: 0.8rem;
-      color: var(--accent-green);
-      margin-bottom: 24px;
-      background: rgba(63,185,80,0.08);
-    }
-    .hero h1 {
-      font-size: clamp(2.5rem, 6vw, 4rem);
-      font-weight: 800;
-      line-height: 1.1;
-      margin-bottom: 20px;
-    }
-    .hero h1 .gradient {
-      background: var(--gradient-hero);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .hero p {
-      font-size: 1.15rem;
-      color: var(--text-secondary);
-      max-width: 560px;
-      margin: 0 auto 40px;
+      width: 100%; height: 100%;
     }
 
-    /* ── Buttons ── */
-    .btn-group { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 14px 28px;
-      border-radius: 10px;
-      font-size: 1rem;
-      font-weight: 600;
-      text-decoration: none;
-      transition: all 0.25s ease;
-      cursor: pointer;
-      border: none;
+    /* ── Terminal Area ── */
+    .terminal-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
     }
-    .btn-primary {
-      background: var(--accent-cyan);
-      color: #0d1117;
-    }
-    .btn-primary:hover {
-      background: #79c0ff;
-      transform: translateY(-2px);
-      box-shadow: 0 8px 30px rgba(88,166,255,0.3);
-    }
-    .btn-secondary {
-      background: var(--bg-card);
-      color: var(--text-primary);
-      border: 1px solid var(--border);
-    }
-    .btn-secondary:hover {
-      background: var(--bg-card-hover);
-      transform: translateY(-2px);
-      border-color: var(--accent-cyan);
-    }
-
-    /* ── Terminal Demo ── */
-    .terminal-section {
-      padding: 60px 0;
-    }
-    .terminal-window {
-      background: #0d1117;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-    }
-    .terminal-bar {
+    .terminal-header {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 12px 16px;
-      background: #161b22;
+      gap: 10px;
+      padding: 10px 16px;
+      background: var(--bg-panel);
       border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
     }
-    .terminal-dot {
-      width: 12px; height: 12px;
-      border-radius: 50%;
+    .terminal-dots {
+      display: flex; gap: 6px;
     }
-    .dot-red { background: #f85149; }
-    .dot-yellow { background: #f0883e; }
-    .dot-green { background: #3fb950; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot-r { background: var(--red); }
+    .dot-y { background: var(--orange); }
+    .dot-g { background: var(--green); }
     .terminal-title {
       flex: 1;
       text-align: center;
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.8rem;
-      color: var(--text-secondary);
+      color: var(--text-dim);
     }
-    .terminal-body {
-      padding: 24px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.85rem;
-      line-height: 1.8;
-      min-height: 280px;
+    .status-badge {
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: 600;
     }
-    .terminal-body .prompt { color: var(--accent-green); }
-    .terminal-body .cmd { color: var(--text-primary); }
-    .terminal-body .comment { color: var(--text-secondary); }
-    .terminal-body .output { color: var(--accent-cyan); }
-    .terminal-body .highlight { color: var(--accent-orange); }
+    .status-connecting { background: rgba(248,177,62,0.15); color: var(--orange); }
+    .status-connected { background: rgba(63,185,80,0.15); color: var(--green); }
+    .status-disconnected { background: rgba(248,81,73,0.15); color: var(--red); }
 
-    /* ── Web Terminal Connect ── */
-    .connect-section {
-      padding: 60px 0;
+    #terminal-container {
+      flex: 1;
+      padding: 4px;
+      background: var(--bg);
     }
-    .connect-card {
-      background: var(--bg-card);
+    #terminal-container .xterm { height: 100%; }
+
+    /* ── Overlay (Connection Form) ── */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(13,17,23,0.92);
+      z-index: 10;
+      transition: opacity 0.3s;
+    }
+    .overlay.hidden { opacity: 0; pointer-events: none; }
+    .connect-box {
+      text-align: center;
+      max-width: 440px;
+      padding: 48px 36px;
+      background: var(--bg-panel);
       border: 1px solid var(--border);
       border-radius: 16px;
-      padding: 48px;
-      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
     }
-    .connect-card h2 {
-      font-size: 1.8rem;
-      margin-bottom: 12px;
+    .connect-box h2 {
+      font-size: 1.5rem;
+      margin-bottom: 8px;
     }
-    .connect-card p {
-      color: var(--text-secondary);
-      margin-bottom: 32px;
-      max-width: 500px;
-      margin-left: auto;
-      margin-right: auto;
+    .connect-box .subtitle {
+      color: var(--text-dim);
+      font-size: 0.9rem;
+      margin-bottom: 28px;
     }
-    .connect-input-group {
+    .connect-box .error-msg {
+      color: var(--red);
+      font-size: 0.85rem;
+      margin-bottom: 16px;
+      min-height: 20px;
+    }
+    .input-row {
       display: flex;
-      gap: 12px;
-      max-width: 520px;
-      margin: 0 auto 16px;
+      gap: 10px;
+      margin-bottom: 16px;
     }
-    .connect-input {
+    .input-row input {
       flex: 1;
-      padding: 14px 18px;
-      background: var(--bg-primary);
+      padding: 12px 16px;
+      background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 10px;
-      color: var(--text-primary);
+      color: var(--text);
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       outline: none;
       transition: border-color 0.2s;
     }
-    .connect-input::placeholder { color: var(--text-secondary); }
-    .connect-input:focus { border-color: var(--accent-cyan); }
-    .connect-hint {
-      font-size: 0.8rem;
-      color: var(--text-secondary);
+    .input-row input:focus { border-color: var(--cyan); }
+    .input-row input::placeholder { color: var(--text-dim); }
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
     }
-    .connect-hint code {
-      background: var(--bg-primary);
+    .btn-primary { background: var(--cyan); color: #0d1117; }
+    .btn-primary:hover { background: #79c0ff; transform: translateY(-1px); }
+    .hint {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+    }
+    .hint code {
+      background: var(--bg);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--orange);
+    }
+
+    /* ── Side Panel ── */
+    .side-panel {
+      width: var(--panel-width);
+      flex-shrink: 0;
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    .panel-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: var(--cyan);
+    }
+    .panel-section {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-section h3 {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+    .shortcut-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .shortcut-list li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85rem;
+    }
+    .key {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      height: 26px;
+      padding: 0 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--cyan);
+      flex-shrink: 0;
+    }
+    .shortcut-desc { color: var(--text-dim); }
+
+    .panel-section.about p {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+    .panel-section.about a {
+      color: var(--cyan);
+      text-decoration: none;
+    }
+    .panel-section.about a:hover { text-decoration: underline; }
+
+    .mode-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .mode-list li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+      color: var(--text-dim);
+    }
+    .mode-tag {
       padding: 2px 8px;
       border-radius: 4px;
       font-family: 'JetBrains Mono', monospace;
-      color: var(--accent-orange);
+      font-size: 0.72rem;
+      font-weight: 700;
     }
+    .mode-hb { background: rgba(88,166,255,0.12); color: var(--cyan); }
+    .mode-qd { background: rgba(188,140,255,0.12); color: var(--purple); }
+    .mode-br { background: rgba(63,185,80,0.12); color: var(--green); }
 
-    /* ── Features ── */
-    .features-section {
-      padding: 60px 0;
-    }
-    .features-section h2 {
-      text-align: center;
-      font-size: 2rem;
-      margin-bottom: 48px;
-    }
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 20px;
-    }
-    .feature-card {
-      background: var(--bg-card);
+    /* ── Toggle button ── */
+    .panel-toggle {
+      position: absolute;
+      right: var(--panel-width);
+      top: 50%;
+      transform: translateY(-50%);
+      width: 20px;
+      height: 60px;
+      background: var(--bg-panel);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 28px;
-      transition: all 0.25s ease;
+      border-right: none;
+      border-radius: 8px 0 0 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-dim);
+      font-size: 0.7rem;
+      z-index: 5;
+      transition: right 0.3s ease;
     }
-    .feature-card:hover {
-      transform: translateY(-4px);
-      border-color: var(--accent-cyan);
-      box-shadow: 0 12px 40px rgba(88,166,255,0.1);
-    }
-    .feature-icon {
-      font-size: 2rem;
-      margin-bottom: 14px;
-    }
-    .feature-card h3 {
-      font-size: 1.1rem;
-      margin-bottom: 8px;
-    }
-    .feature-card p {
-      font-size: 0.9rem;
-      color: var(--text-secondary);
-    }
+    .panel-toggle:hover { background: var(--bg); color: var(--text); }
+    .app.panel-collapsed .side-panel { display: none; }
+    .app.panel-collapsed .panel-toggle { right: 0; }
 
-    /* ── Footer ── */
-    footer {
-      padding: 40px 0;
-      border-top: 1px solid var(--border);
-      text-align: center;
+    /* ── Mobile ── */
+    @media (max-width: 768px) {
+      .side-panel { display: none; }
+      .panel-toggle { display: none; }
     }
-    footer p {
-      color: var(--text-secondary);
-      font-size: 0.85rem;
-    }
-    footer a {
-      color: var(--accent-cyan);
-      text-decoration: none;
-    }
-    footer a:hover { text-decoration: underline; }
-
-    /* ── Responsive ── */
-    @media (max-width: 640px) {
-      .hero { padding: 60px 0 40px; }
-      .connect-input-group { flex-direction: column; }
-      .connect-card { padding: 32px 20px; }
-      .nav-links { display: none; }
-    }
-
-    /* ── Animations ── */
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(30px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .animate-in {
-      animation: fadeInUp 0.6s ease-out forwards;
-    }
-    .delay-1 { animation-delay: 0.1s; opacity: 0; }
-    .delay-2 { animation-delay: 0.2s; opacity: 0; }
-    .delay-3 { animation-delay: 0.3s; opacity: 0; }
-    .delay-4 { animation-delay: 0.4s; opacity: 0; }
-
-    /* ── Typing animation ── */
-    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
-    .cursor { animation: blink 1s step-end infinite; color: var(--accent-green); }
   </style>
 </head>
 <body>
-
-  <!-- Background Effects -->
-  <div class="bg-grid"></div>
-  <div class="bg-glow bg-glow-1"></div>
-  <div class="bg-glow bg-glow-2"></div>
-
-  <!-- Header -->
-  <header>
-    <div class="container">
-      <a href="#" class="logo">🚀 TermVG <span>v1.0</span></a>
-      <nav class="nav-links">
-        <a href="#features">Features</a>
-        <a href="#connect">Web Terminal</a>
-        <a href="https://github.com/OSSCA-thorvg/Hackathon-Terminal_Vector_Graphics" target="_blank">GitHub</a>
-      </nav>
-    </div>
-  </header>
-
-  <!-- Hero -->
-  <section class="hero">
-    <div class="container">
-      <div class="hero-badge animate-in delay-1">⚡ Powered by ThorVG + WebAssembly</div>
-      <h1 class="animate-in delay-2">
-        <span class="gradient">Terminal Vector Graphics</span><br/>Player
-      </h1>
-      <p class="animate-in delay-3">
-        CLI 환경에서 Lottie 애니메이션과 SVG를 30fps로 실시간 렌더링합니다.<br/>
-        LottieFiles MCP 연동으로 온라인 에셋 검색부터 즉시 재생까지.
-      </p>
-      <div class="btn-group animate-in delay-4">
-        <a href="#connect" class="btn btn-primary">🌐 웹 터미널 접속</a>
-        <a href="https://github.com/OSSCA-thorvg/Hackathon-Terminal_Vector_Graphics" class="btn btn-secondary" target="_blank">📦 GitHub</a>
-      </div>
-    </div>
-  </section>
-
-  <!-- Terminal Demo -->
-  <section class="terminal-section">
-    <div class="container animate-in delay-3">
-      <div class="terminal-window">
-        <div class="terminal-bar">
-          <div class="terminal-dot dot-red"></div>
-          <div class="terminal-dot dot-yellow"></div>
-          <div class="terminal-dot dot-green"></div>
-          <span class="terminal-title">termvg — ThorVG Terminal Player</span>
+  <div class="app" id="app">
+    <!-- Terminal -->
+    <div class="terminal-area" style="position: relative;">
+      <div class="terminal-header">
+        <div class="terminal-dots">
+          <div class="dot dot-r"></div>
+          <div class="dot dot-y"></div>
+          <div class="dot dot-g"></div>
         </div>
-        <div class="terminal-body">
-          <div><span class="comment"># 인터랙티브 모드 실행</span></div>
-          <div><span class="prompt">$ </span><span class="cmd">npx tsx src/index.tsx</span></div>
-          <div>&nbsp;</div>
-          <div><span class="output">🚀 termvg - ThorVG Terminal Player</span></div>
-          <div><span class="highlight">┌──────────────────────┐  ┌────────────────────────────┐</span></div>
-          <div><span class="highlight">│</span> <span class="output">📄 fireworks.json</span>    <span class="highlight">│  │</span> <span class="output">Live Preview ▶ 30fps</span>      <span class="highlight">│</span></div>
-          <div><span class="highlight">│</span> <span class="output">📄 loading.json</span>      <span class="highlight">│  │</span>                            <span class="highlight">│</span></div>
-          <div><span class="highlight">│</span> <span class="cmd">  📄 emoji.svg</span>       <span class="highlight">│  │</span>  <span class="comment">  ██ ▄▄ ██ ▄▄ ██</span>        <span class="highlight">│</span></div>
-          <div><span class="highlight">│</span>                      <span class="highlight">│  │</span>  <span class="comment">  ██▀▀▀▀██▀▀▀▀██</span>        <span class="highlight">│</span></div>
-          <div><span class="highlight">│</span> <span class="output">Page 1/3 (42)</span>       <span class="highlight">│  │</span>  <span class="comment">  ▀▀ ▄▄ ▀▀ ▄▄ ▀▀</span>        <span class="highlight">│</span></div>
-          <div><span class="highlight">│</span> <span class="cmd">S:Search L:LottieFiles</span><span class="highlight">│  │</span>                            <span class="highlight">│</span></div>
-          <div><span class="highlight">└──────────────────────┘  └────────────────────────────┘</span></div>
-          <div>&nbsp;</div>
-          <div><span class="comment"># Space:⏯  M:렌더모드  D:다크모드  ←→:시크</span></div>
-          <div><span class="prompt">▋</span><span class="cursor">_</span></div>
+        <span class="terminal-title">🚀 TermVG — Terminal Vector Graphics Player</span>
+        <span class="status-badge status-connecting" id="status-badge">연결 중...</span>
+      </div>
+      <div id="terminal-container"></div>
+
+      <!-- Connection Overlay -->
+      <div class="overlay" id="overlay">
+        <div class="connect-box">
+          <h2>🚀 TermVG Web Terminal</h2>
+          <p class="subtitle">ttyd 서버에 접속하여 터미널을 시작합니다</p>
+          <div class="error-msg" id="error-msg"></div>
+          <div class="input-row">
+            <input type="text" id="server-url" placeholder="http://your-server:8080" />
+            <button class="btn btn-primary" id="connect-btn" onclick="doConnect()">접속</button>
+          </div>
+          <p class="hint">
+            서버에서 먼저 실행하세요:<br/>
+            <code>npx tsx src/index.tsx web</code>
+          </p>
         </div>
       </div>
     </div>
-  </section>
 
-  <!-- Web Terminal Connect -->
-  <section class="connect-section" id="connect">
-    <div class="container">
-      <div class="connect-card animate-in">
-        <h2>🌐 웹 터미널 접속</h2>
-        <p>서버에서 실행 중인 ttyd 웹 터미널에 접속하여<br/>브라우저에서 TermVG를 바로 체험하세요.</p>
-        <div class="connect-input-group">
-          <input type="text" class="connect-input" id="ttyd-url" placeholder="http://your-server:8080" value="" />
-          <button class="btn btn-primary" id="connect-btn" onclick="connectTerminal()">접속</button>
-        </div>
-        <p class="connect-hint">
-          서버에서 먼저 실행: <code>npx tsx src/index.tsx web</code>
+    <!-- Side Panel Toggle -->
+    <div class="panel-toggle" id="panel-toggle" onclick="togglePanel()">◀</div>
+
+    <!-- Side Panel -->
+    <div class="side-panel">
+      <div class="panel-header">📖 사용 가이드</div>
+
+      <div class="panel-section">
+        <h3>🗂 파일 탐색</h3>
+        <ul class="shortcut-list">
+          <li><span class="key">O</span><span class="shortcut-desc">폴더 경로 열기</span></li>
+          <li><span class="key">↑↓</span><span class="shortcut-desc">파일 탐색</span></li>
+          <li><span class="key">←→</span><span class="shortcut-desc">페이지 넘기기</span></li>
+          <li><span class="key">S</span><span class="shortcut-desc">파일 검색</span></li>
+          <li><span class="key">Enter</span><span class="shortcut-desc">파일 선택/재생</span></li>
+        </ul>
+      </div>
+
+      <div class="panel-section">
+        <h3>▶ 재생 제어</h3>
+        <ul class="shortcut-list">
+          <li><span class="key">Space</span><span class="shortcut-desc">재생/일시정지</span></li>
+          <li><span class="key">←→</span><span class="shortcut-desc">프레임 시크 (정지 중)</span></li>
+        </ul>
+      </div>
+
+      <div class="panel-section">
+        <h3>🎨 렌더링</h3>
+        <ul class="shortcut-list">
+          <li><span class="key">M</span><span class="shortcut-desc">렌더 모드 전환</span></li>
+          <li><span class="key">D</span><span class="shortcut-desc">다크 모드 전환</span></li>
+        </ul>
+        <ul class="mode-list" style="margin-top: 10px;">
+          <li><span class="mode-tag mode-hb">HB</span> Half-block (1×2)</li>
+          <li><span class="mode-tag mode-qd">QD</span> Quadrant (2×2)</li>
+          <li><span class="mode-tag mode-br">BR</span> Braille (2×4)</li>
+        </ul>
+      </div>
+
+      <div class="panel-section">
+        <h3>🌐 LottieFiles</h3>
+        <ul class="shortcut-list">
+          <li><span class="key">L</span><span class="shortcut-desc">LottieFiles 검색</span></li>
+          <li><span class="key">ESC</span><span class="shortcut-desc">검색 취소</span></li>
+        </ul>
+      </div>
+
+      <div class="panel-section about">
+        <h3>ℹ️ About</h3>
+        <p>
+          <strong>TermVG</strong>는 ThorVG C++ 엔진을 WebAssembly로 컴파일하여
+          터미널에서 Lottie/SVG를 30fps로 실시간 렌더링하는 플레이어입니다.
+        </p>
+        <p>
+          <a href="https://github.com/OSSCA-thorvg/Hackathon-Terminal_Vector_Graphics" target="_blank">📦 GitHub Repository</a><br/>
+          <a href="https://www.thorvg.org" target="_blank">🔧 ThorVG Engine</a>
         </p>
       </div>
     </div>
-  </section>
-
-  <!-- Features -->
-  <section class="features-section" id="features">
-    <div class="container">
-      <h2>✨ 핵심 기능</h2>
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">⚡</div>
-          <h3>WASM 네이티브 성능</h3>
-          <p>ThorVG C++ 엔진을 WebAssembly로 컴파일하여 30fps 실시간 렌더링</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🎨</div>
-          <h3>3가지 렌더링 모드</h3>
-          <p>Half-block, Quadrant, Braille 문자로 터미널 해상도 극대화</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🔍</div>
-          <h3>실시간 파일 검색</h3>
-          <p>로컬 폴더 스캔 + 실시간 필터링으로 빠른 파일 탐색</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🌐</div>
-          <h3>LottieFiles MCP</h3>
-          <p>OAuth 2.0 + QR 인증으로 온라인 에셋 검색/다운로드/즉시 재생</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🖥️</div>
-          <h3>웹 터미널</h3>
-          <p>ttyd 연동으로 브라우저에서도 동일한 CLI 경험 제공</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🛡️</div>
-          <h3>더블 버퍼링</h3>
-          <p>Synchronized Output Mode로 애니메이션 깜빡임 완전 제거</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Footer -->
-  <footer>
-    <div class="container">
-      <p>
-        Built with <a href="https://www.thorvg.org" target="_blank">ThorVG</a> •
-        <a href="https://github.com/OSSCA-thorvg/Hackathon-Terminal_Vector_Graphics" target="_blank">GitHub</a> •
-        OSSCA 2025 Hackathon
-      </p>
-    </div>
-  </footer>
+  </div>
 
   <script>
-    function connectTerminal() {
-      const url = document.getElementById('ttyd-url').value.trim();
-      if (!url) {
-        document.getElementById('ttyd-url').style.borderColor = '#f85149';
-        document.getElementById('ttyd-url').placeholder = 'URL을 입력하세요';
-        return;
+    // ── Config ──
+    const DEFAULT_SERVER = ''; // Set default ttyd server URL here, e.g., 'http://your-server:8080'
+
+    // ── State ──
+    let term = null;
+    let ws = null;
+    let fitAddon = null;
+
+    // ── Initialize Terminal ──
+    function initTerminal() {
+      term = new window.Terminal({
+        fontFamily: "'JetBrains Mono', 'Menlo', 'DejaVu Sans Mono', monospace",
+        fontSize: 14,
+        lineHeight: 1.1,
+        theme: {
+          background: '#0d1117',
+          foreground: '#e6edf3',
+          cursor: '#58a6ff',
+          cursorAccent: '#0d1117',
+          selectionBackground: 'rgba(88,166,255,0.3)',
+          black: '#484f58',
+          red: '#ff7b72',
+          green: '#3fb950',
+          yellow: '#d29922',
+          blue: '#58a6ff',
+          magenta: '#bc8cff',
+          cyan: '#39d353',
+          white: '#b1bac4',
+          brightBlack: '#6e7681',
+          brightRed: '#ffa198',
+          brightGreen: '#56d364',
+          brightYellow: '#e3b341',
+          brightBlue: '#79c0ff',
+          brightMagenta: '#d2a8ff',
+          brightCyan: '#56d364',
+          brightWhite: '#f0f6fc',
+        },
+        cursorBlink: true,
+        allowProposedApi: true,
+      });
+
+      fitAddon = new window.FitAddon.FitAddon();
+      term.loadAddon(fitAddon);
+      term.loadAddon(new window.WebLinksAddon.WebLinksAddon());
+
+      const container = document.getElementById('terminal-container');
+      term.open(container);
+      fitAddon.fit();
+
+      window.addEventListener('resize', () => {
+        if (fitAddon) fitAddon.fit();
+        sendResize();
+      });
+
+      // Try auto-connect
+      const urlInput = document.getElementById('server-url');
+      if (DEFAULT_SERVER) {
+        urlInput.value = DEFAULT_SERVER;
+        doConnect();
+      } else {
+        // Check URL params
+        const params = new URLSearchParams(window.location.search);
+        const serverParam = params.get('server');
+        if (serverParam) {
+          urlInput.value = serverParam;
+          doConnect();
+        }
       }
-      // Validate URL format
-      try {
-        new URL(url);
-      } catch {
-        document.getElementById('ttyd-url').style.borderColor = '#f85149';
-        return;
-      }
-      window.open(url, '_blank');
     }
 
-    // Enter key support
-    document.getElementById('ttyd-url').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') connectTerminal();
-      e.target.style.borderColor = '#30363d';
-    });
+    // ── Connect to ttyd ──
+    function doConnect() {
+      const urlInput = document.getElementById('server-url');
+      const errorMsg = document.getElementById('error-msg');
+      let baseUrl = urlInput.value.trim();
 
-    // Intersection Observer for scroll animations
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('animate-in');
+      if (!baseUrl) {
+        errorMsg.textContent = 'URL을 입력하세요';
+        return;
+      }
+
+      // Normalize URL
+      baseUrl = baseUrl.replace(/\/+$/, '');
+
+      // Build WebSocket URL
+      // ttyd serves websocket at /ws
+      let wsUrl;
+      try {
+        const parsed = new URL(baseUrl);
+        const wsProtocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsUrl = `${wsProtocol}//${parsed.host}${parsed.pathname}/ws`;
+      } catch {
+        errorMsg.textContent = '유효한 URL을 입력하세요 (예: http://server:8080)';
+        return;
+      }
+
+      errorMsg.textContent = '';
+      setStatus('connecting');
+
+      // Close existing connection
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+
+      term.clear();
+      term.writeln('\x1b[36m⏳ 서버에 접속 중...\x1b[0m');
+      term.writeln(`\x1b[90m   ${wsUrl}\x1b[0m`);
+      term.writeln('');
+
+      ws = new WebSocket(wsUrl);
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = () => {
+        setStatus('connected');
+        hideOverlay();
+        term.clear();
+        term.focus();
+
+        // Send initial terminal size
+        sendResize();
+
+        // Handle terminal input → server
+        term.onData((data) => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            // ttyd protocol: first byte 0 = input
+            const buf = new Uint8Array(data.length + 1);
+            buf[0] = 0; // input type
+            for (let i = 0; i < data.length; i++) {
+              buf[i + 1] = data.charCodeAt(i);
+            }
+            ws.send(buf.buffer);
+          }
+        });
+      };
+
+      ws.onmessage = (event) => {
+        if (event.data instanceof ArrayBuffer) {
+          const data = new Uint8Array(event.data);
+          // ttyd protocol: first byte indicates message type
+          // 0 = output, 1 = set window title, 2 = set preferences
+          if (data[0] === 0) {
+            // Output data
+            const text = new TextDecoder().decode(data.slice(1));
+            term.write(text);
+          } else if (data[0] === 1) {
+            // Window title
+            const title = new TextDecoder().decode(data.slice(1));
+            document.querySelector('.terminal-title').textContent = '🚀 ' + title;
+          }
         }
-      });
-    }, { threshold: 0.1 });
+      };
 
-    document.querySelectorAll('.feature-card').forEach(card => {
-      observer.observe(card);
+      ws.onerror = () => {
+        setStatus('disconnected');
+        showOverlay('접속 실패. 서버가 실행 중인지 확인하세요.');
+      };
+
+      ws.onclose = (event) => {
+        setStatus('disconnected');
+        if (!event.wasClean) {
+          showOverlay('연결이 끊어졌습니다. 서버를 확인 후 다시 접속하세요.');
+        } else {
+          showOverlay('세션이 종료되었습니다.');
+        }
+        term.writeln('');
+        term.writeln('\x1b[31m⚠ 연결 종료\x1b[0m');
+      };
+    }
+
+    // ── Send terminal size to ttyd ──
+    function sendResize() {
+      if (ws && ws.readyState === WebSocket.OPEN && term) {
+        // ttyd protocol: type 1 = resize, followed by JSON
+        const msg = JSON.stringify({ columns: term.cols, rows: term.rows });
+        const buf = new Uint8Array(msg.length + 1);
+        buf[0] = 1; // resize type
+        for (let i = 0; i < msg.length; i++) {
+          buf[i + 1] = msg.charCodeAt(i);
+        }
+        ws.send(buf.buffer);
+      }
+    }
+
+    // ── UI Helpers ──
+    function setStatus(state) {
+      const badge = document.getElementById('status-badge');
+      badge.className = 'status-badge';
+      if (state === 'connecting') {
+        badge.classList.add('status-connecting');
+        badge.textContent = '연결 중...';
+      } else if (state === 'connected') {
+        badge.classList.add('status-connected');
+        badge.textContent = '● 연결됨';
+      } else {
+        badge.classList.add('status-disconnected');
+        badge.textContent = '● 연결 끊김';
+      }
+    }
+
+    function showOverlay(errorText) {
+      const overlay = document.getElementById('overlay');
+      const errorMsg = document.getElementById('error-msg');
+      overlay.classList.remove('hidden');
+      if (errorText) errorMsg.textContent = errorText;
+    }
+
+    function hideOverlay() {
+      document.getElementById('overlay').classList.add('hidden');
+    }
+
+    function togglePanel() {
+      const app = document.getElementById('app');
+      const toggle = document.getElementById('panel-toggle');
+      app.classList.toggle('panel-collapsed');
+      toggle.textContent = app.classList.contains('panel-collapsed') ? '▶' : '◀';
+      setTimeout(() => { if (fitAddon) fitAddon.fit(); sendResize(); }, 350);
+    }
+
+    // Enter key
+    document.addEventListener('DOMContentLoaded', () => {
+      initTerminal();
+      document.getElementById('server-url').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') doConnect();
+      });
     });
   </script>
 </body>

@@ -1,6 +1,6 @@
 {
   "name": "termvg",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Terminal Vector Graphics Player — Render Lottie/SVG animations in the terminal using ThorVG + WebAssembly",
   "type": "module",
   "main": "dist/index.js",
@@ -61,4 +61,3 @@
     "typescript": "^5.0.0"
   }
 }
-

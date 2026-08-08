@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
+import path from 'path';
 import { realWasmModule } from './realWasmModule.js';
 import { useFileScanner, type FileItem } from './hooks/useFileScanner.js';
 import { useMcpSearch } from './hooks/useMcpSearch.js';
@@ -47,8 +48,9 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
   }, scanner.basePath);
 
   // ─── 레이아웃 및 필터링 ───
-  const displayFileList = scanner.fileList.filter(f => f.value.toLowerCase().includes(localSearchQuery.toLowerCase()));
-  const pageSize = Math.min(15, Math.max(5, termSize.rows - 17));
+  const displayFileList = scanner.fileList.filter(f => path.basename(f.value).toLowerCase().includes(localSearchQuery.toLowerCase()));
+  const extraHeight = isLocalSearchMode ? 4 : 0;
+  const pageSize = Math.min(15, Math.max(5, termSize.rows - 17 - extraHeight));
   const totalPages = Math.ceil(displayFileList.length / pageSize) || 1;
   const leftPanelCols = Math.floor(termSize.columns * 0.30) - 4;
   const previewWidth = Math.max(20, Math.floor((termSize.columns - 2) * 0.68) - 4);

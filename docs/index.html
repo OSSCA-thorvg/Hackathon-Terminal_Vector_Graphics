@@ -481,6 +481,8 @@
         engine.init();
         wasmReady = true;
         drawUI();
+        // Auto-load first file on startup
+        loadSelectedFile();
       } catch (e) {
         term.write(CLEAR + `${RED}❌ WASM 로드 실패: ${e.message}${RESET}`);
         console.error(e);

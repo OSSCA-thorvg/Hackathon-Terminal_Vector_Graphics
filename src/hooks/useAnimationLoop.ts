@@ -8,6 +8,7 @@ interface AnimationConfig {
   modeInt: number;
   invertDark: boolean;
   loop: boolean;
+  paused: boolean;
   onLoad?: (duration: number, totalFrames: number) => void;
   onComplete?: () => void;
   onFrame: (ansiString: string, frame: number, totalFrames: number, fps: number) => void;
@@ -124,7 +125,12 @@ export function useAnimationLoop(config: AnimationConfig): AnimationControls {
         fpsCountRef.current = 0;
       }, 1000);
 
-      startTimer();
+      // paused 상태면 타이머 시작하지 않고 현재 프레임만 렌더
+      if (configRef.current.paused) {
+        renderCurrentFrame();
+      } else {
+        startTimer();
+      }
     };
 
     setup();

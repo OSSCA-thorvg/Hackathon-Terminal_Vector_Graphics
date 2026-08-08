@@ -69,6 +69,7 @@ export const LottiePlayer: React.FC<LottiePlayerProps> = ({
     modeInt,
     invertDark,
     loop,
+    paused,
     onLoad,
     onComplete,
     onFrame,

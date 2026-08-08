@@ -34,10 +34,16 @@ export const createSyncStdout = (originalStdout: NodeJS.WriteStream): NodeJS.Wri
     buffer = [];
     isTickScheduled = false;
 
+    let dataStr = data.toString('utf8');
+    // xterm.js (ttyd) 등에서 동기화 시퀀스(BSU/ESU)를 무시할 경우를 대비하여,
+    // 화면을 지우는 이스케이프 시퀀스(Clear Line 2K, Clear Screen J)를 강제로 제거하고 
+    // '단순 덮어쓰기(Overwrite)' 모드로 렌더링되게 합니다.
+    dataStr = dataStr.replace(/\x1b\[(2K|[0-2]?J)/g, '');
+
     // 1. 동기화 시작 (Begin Synchronized Update)
     originalStdout.write('\x1b[?2026h');
-    // 2. 버퍼링된 모든 청크(프레임 전체) 출력
-    originalStdout.write(data);
+    // 2. 버퍼링된 텍스트 출력
+    originalStdout.write(dataStr);
     // 3. 동기화 종료 (End Synchronized Update)
     originalStdout.write('\x1b[?2026l');
   };

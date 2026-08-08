@@ -109,13 +109,13 @@ npm install
 
 ```bash
 # 인터랙티브 모드 (파일 탐색기 + 프리뷰)
-npx tsx index.tsx
+npx tsx src/index.tsx
 
 # 단일 파일 재생
-npx tsx index.tsx play example.json
+npx tsx src/index.tsx play assets/example.json
 
 # 웹 터미널 (브라우저에서 접속)
-npx tsx index.tsx web
+npx tsx src/index.tsx web
 # → http://localhost:8080 에서 접속
 ```
 

@@ -282,4 +282,165 @@ export async function getAccessToken(forceLogin = false): Promise<string> {
   return token.access_token;
 }
 
+// ─── Ink UI 연동을 위한 분해된 인증 빌딩 블록 ───
+
+/**
+ * 캐시된 토큰이 유효하면 반환, 만료 시 refresh 시도.
+ * 로그인 플로우는 실행하지 않습니다.
+ */
+export async function tryGetCachedToken(): Promise<string | null> {
+  const cached = loadToken();
+  if (!cached) return null;
+  if (Date.now() < cached.expires_at - 300000) return cached.access_token;
+  const refreshed = await refreshAccessToken(cached);
+  return refreshed?.access_token || null;
+}
+
+/**
+ * OAuth 인증 플로우를 시작합니다. (console/readline 사용 안 함)
+ * Dynamic Client Registration + PKCE + QR 생성 후 결과를 반환합니다.
+ */
+export async function initiateAuthFlow(): Promise<{
+  authUrl: string;
+  qrText: string;
+  verifier: string;
+  clientId: string;
+  state: string;
+}> {
+  const regRes = await fetch(REGISTER_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      client_name: "TermVG CLI",
+      redirect_uris: [REDIRECT_URI],
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+      scope: "mcp:full",
+    }),
+  });
+  if (!regRes.ok) throw new Error(`Client Registration 실패: ${regRes.status}`);
+  const regData = (await regRes.json()) as any;
+  const clientId = regData.client_id;
+
+  const { verifier, challenge } = generatePKCE();
+  const state = base64url(crypto.randomBytes(16));
+
+  const authUrl =
+    `${AUTH_URL}?` +
+    new URLSearchParams({
+      response_type: "code",
+      client_id: clientId,
+      redirect_uri: REDIRECT_URI,
+      scope: "mcp:full",
+      state,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+    }).toString();
+
+  const qrText = await new Promise<string>((resolve) => {
+    qrcode.generate(authUrl, { small: true }, (qr: string) => resolve(qr));
+  });
+
+  return { authUrl, qrText, verifier, clientId, state };
+}
+
+/**
+ * 로컬 HTTP 콜백 서버를 시작합니다.
+ */
+export function startCallbackServer(expectedState: string): {
+  promise: Promise<string>;
+  cleanup: () => void;
+} {
+  let server: http.Server | null = null;
+  let timeoutId: NodeJS.Timeout | null = null;
+
+  const promise = new Promise<string>((resolve, reject) => {
+    server = http.createServer((req, res) => {
+      const url = new URL(req.url!, `http://localhost:${REDIRECT_PORT}`);
+      if (url.pathname === "/callback") {
+        const code = url.searchParams.get("code");
+        const returnedState = url.searchParams.get("state");
+        const error = url.searchParams.get("error");
+
+        if (error) {
+          res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+          res.end(`<h1>❌ 인증 실패</h1><p>${error}</p>`);
+          try { server?.close(); } catch {}
+          if (timeoutId) clearTimeout(timeoutId);
+          reject(new Error(`OAuth error: ${error}`));
+          return;
+        }
+        if (returnedState !== expectedState) {
+          res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+          res.end("<h1>❌ State 불일치</h1>");
+          try { server?.close(); } catch {}
+          if (timeoutId) clearTimeout(timeoutId);
+          reject(new Error("State mismatch"));
+          return;
+        }
+
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(
+          "<html><body style='text-align:center;padding:50px;font-family:sans-serif'>" +
+          "<h1>✅ 인증 성공!</h1><p>터미널로 돌아가세요.</p></body></html>"
+        );
+        try { server?.close(); } catch {}
+        if (timeoutId) clearTimeout(timeoutId);
+        resolve(code!);
+      }
+    });
+
+    server.listen(REDIRECT_PORT);
+    timeoutId = setTimeout(() => {
+      try { server?.close(); } catch {}
+      reject(new Error("인증 타임아웃 (3분)"));
+    }, 180000);
+  });
+
+  return {
+    promise,
+    cleanup: () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      try { server?.close(); } catch {}
+    },
+  };
+}
+
+/**
+ * 인증 코드를 access_token으로 교환하고 저장합니다.
+ */
+export async function exchangeCodeForToken(
+  code: string,
+  verifier: string,
+  clientId: string
+): Promise<string> {
+  const tokenRes = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: REDIRECT_URI,
+      client_id: clientId,
+      code_verifier: verifier,
+    }).toString(),
+  });
+
+  if (!tokenRes.ok) {
+    throw new Error(`Token 교환 실패: ${tokenRes.status} ${await tokenRes.text()}`);
+  }
+
+  const tokenData = (await tokenRes.json()) as any;
+  const result: TokenData = {
+    access_token: tokenData.access_token,
+    refresh_token: tokenData.refresh_token,
+    client_id: clientId,
+    expires_at: Date.now() + (tokenData.expires_in || 3600) * 1000,
+  };
+
+  saveToken(result);
+  return result.access_token;
+}
+
 export { MCP_ENDPOINT };

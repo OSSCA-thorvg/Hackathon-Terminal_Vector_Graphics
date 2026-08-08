@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
+import TextInput from 'ink-text-input';
 import path from 'path';
 import { realWasmModule } from './realWasmModule.js';
 import { useFileScanner, type FileItem } from './hooks/useFileScanner.js';
@@ -35,6 +36,7 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
   const [inputPath, setInputPath] = useState('');
   const [isLocalSearchMode, setIsLocalSearchMode] = useState(false);
   const [localSearchQuery, setLocalSearchQuery] = useState('');
+  const [authCodeInput, setAuthCodeInput] = useState('');
 
   // ─── 재생 제어 ───
   const [isPaused, setIsPaused] = useState(false);
@@ -64,11 +66,12 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
 
   // ─── 키보드 핸들러 ───
   useInput((input, key) => {
-    if (isInputMode || mcp.searchMode || isLocalSearchMode) {
+    if (isInputMode || mcp.searchMode || isLocalSearchMode || mcp.authState.status !== 'idle') {
       if (key.escape) {
         setIsInputMode(false);
         setIsLocalSearchMode(false);
         if (isLocalSearchMode) setLocalSearchQuery('');
+        setAuthCodeInput('');
         mcp.closeSearch();
       }
       return;
@@ -88,7 +91,7 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
     if (input.toLowerCase() === 'd') { setInvertDark(prev => !prev); }
     if (input.toLowerCase() === 's') { setIsLocalSearchMode(true); }
     if (input.toLowerCase() === 'o') { setInputPath(scanner.basePath); setIsInputMode(true); }
-    if (input.toLowerCase() === 'l') { mcp.openSearch(); }
+    if (input.toLowerCase() === 'l' && scanner.basePath) { mcp.openSearch(); }
   });
 
   // ─── 이벤트 핸들러 ───
@@ -111,6 +114,62 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
   };
 
   // ─── 렌더링 ───
+
+  // 인증 모드: 전체 화면 QR 코드 + 수동 입력
+  const prevAuthStatus = useRef(mcp.authState.status);
+  useEffect(() => {
+    if (mcp.authState.status !== 'idle' && prevAuthStatus.current === 'idle') {
+      // 인증 화면 진입 시 화면 클리어 (이전 Lottie 렌더링 잔상 제거)
+      process.stdout.write('\x1b[2J\x1b[H');
+    }
+    prevAuthStatus.current = mcp.authState.status;
+  }, [mcp.authState.status]);
+
+  if (mcp.authState.status !== 'idle') {
+    return (
+      <Box flexDirection="column" paddingX={2} width={termSize.columns} height={termSize.rows - 1}>
+        <Box marginBottom={1}>
+          <Text bold color="green">🔐 LottieFiles 인증</Text>
+        </Box>
+        {mcp.authState.status === 'initializing' && (
+          <Text color="yellow">⏳ 인증 준비 중... (Client 등록 + PKCE 생성)</Text>
+        )}
+        {mcp.authState.status === 'waiting' && (
+          <>
+            <Text color="white">📱 QR 코드를 스캔하여 로그인하세요:</Text>
+            <Box marginY={1}>
+              <Text>{mcp.authState.qrText}</Text>
+            </Box>
+            <Text color="gray" wrap="truncate-end">🔗 {mcp.authState.authUrl}</Text>
+            <Box marginTop={1} flexDirection="column">
+              <Text color="white">─────────────────────────────────────</Text>
+              <Text color="cyan">📋 또는 리다이렉트 URL/코드를 붙여넣으세요:</Text>
+              <TextInput
+                value={authCodeInput}
+                onChange={setAuthCodeInput}
+                onSubmit={(val) => {
+                  if (val.trim()) {
+                    mcp.submitAuthCode(val.trim());
+                    setAuthCodeInput('');
+                  }
+                }}
+              />
+            </Box>
+            <Box marginTop={1}>
+              <Text color="gray">(ESC:취소)</Text>
+            </Box>
+          </>
+        )}
+        {mcp.authState.status === 'exchanging' && (
+          <Text color="yellow">🔄 토큰 교환 중...</Text>
+        )}
+        {mcp.authState.status === 'error' && (
+          <Text color="red">❌ {mcp.authState.error}</Text>
+        )}
+      </Box>
+    );
+  }
+
   return (
     <Box flexDirection="column" paddingX={1} width={termSize.columns} height={termSize.rows - 1}>
       <Box>

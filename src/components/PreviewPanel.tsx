@@ -62,7 +62,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
       {/* 프리뷰 영역 */}
       {isPlayableFile(selectedFile) ? (
         <LottiePlayer
-          key={`${selectedFile!.value}-${settingsMode}-${previewWidth}-${previewHeight}`}
+          key={`${selectedFile!.value}-${previewWidth}-${previewHeight}`}
           wasmModule={wasmModule}
           filePath={selectedFile!.value}
           width={previewWidth}

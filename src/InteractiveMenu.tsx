@@ -48,7 +48,13 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
   }, scanner.basePath);
 
   // ─── 레이아웃 및 필터링 ───
-  const displayFileList = scanner.fileList.filter(f => path.basename(f.value).toLowerCase().includes(localSearchQuery.toLowerCase()));
+  const displayFileList = scanner.fileList.filter(f => {
+    if (isLocalSearchMode || localSearchQuery) {
+      if (f.value.startsWith('__folder__')) return false;
+      return path.basename(f.value).toLowerCase().includes(localSearchQuery.toLowerCase());
+    }
+    return true;
+  });
   const extraHeight = isLocalSearchMode ? 4 : 0;
   const pageSize = Math.min(15, Math.max(5, termSize.rows - 17 - extraHeight));
   const totalPages = Math.ceil(displayFileList.length / pageSize) || 1;

@@ -130,33 +130,37 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
           />
           <Text color="gray">(Enter to apply, ESC cancel)</Text>
         </Box>
-      ) : isLocalSearchMode ? (
-        <Box flexDirection="column" marginBottom={1}>
-          <Text color="green" bold>🔍 현재 폴더 검색:</Text>
-          <TextInput
-            value={localSearchQuery}
-            onChange={onLocalSearchQueryChange}
-            onSubmit={onLocalSearchSubmit}
-          />
-          <Text color="gray">(ESC:취소, Enter:완료)</Text>
-        </Box>
       ) : !basePath ? (
         <Box flexDirection="column">
           <Text color="gray">O 키를 눌러 경로를 지정하세요</Text>
         </Box>
       ) : (
-        fileList.length > 0 ? (
-          <SelectInput
-            items={fileList.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(f => ({
-              ...f, label: truncLabel(f.label, leftPanelCols)
-            }))}
-            limit={pageSize}
-            onSelect={onSelect}
-            onHighlight={onHighlight}
-          />
-        ) : (
-          <Text>Loading files...</Text>
-        )
+        <Box flexDirection="column">
+          {isLocalSearchMode && (
+            <Box flexDirection="column" marginBottom={1}>
+              <Text color="green" bold>🔍 현재 폴더 검색:</Text>
+              <TextInput
+                value={localSearchQuery}
+                onChange={onLocalSearchQueryChange}
+                onSubmit={onLocalSearchSubmit}
+              />
+              <Text color="gray">(ESC:취소, Enter:리스트 진입)</Text>
+            </Box>
+          )}
+          {fileList.length > 0 ? (
+            <SelectInput
+              isFocused={!isLocalSearchMode}
+              items={fileList.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(f => ({
+                ...f, label: truncLabel(f.label, leftPanelCols)
+              }))}
+              limit={pageSize}
+              onSelect={onSelect}
+              onHighlight={onHighlight}
+            />
+          ) : (
+            <Text>No files found.</Text>
+          )}
+        </Box>
       )}
 
       {/* FOOTER */}

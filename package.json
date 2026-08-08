@@ -13,8 +13,8 @@
     "termvg.wasm"
   ],
   "scripts": {
-    "start": "tsx index.tsx",
-    "build": "tsc && cp termvg.cjs termvg.wasm dist/ 2>/dev/null && chmod +x dist/index.js || true"
+    "start": "tsx src/index.tsx",
+    "build": "tsc && cp src/termvg.cjs src/termvg.wasm dist/ 2>/dev/null && chmod +x dist/index.js || true"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

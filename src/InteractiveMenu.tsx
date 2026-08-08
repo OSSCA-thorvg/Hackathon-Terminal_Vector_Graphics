@@ -93,6 +93,7 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
 
   // ─── 이벤트 핸들러 ───
   const handleHighlight = (item: any) => {
+    if (!item) return;
     const file = scanner.fileList.find(f => f.value === item.value);
     setSelectedFile(file && !file.value.startsWith('__folder__') && file.value !== '' ? file : null);
   };
@@ -137,7 +138,10 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
           }}
           isLocalSearchMode={isLocalSearchMode}
           localSearchQuery={localSearchQuery}
-          onLocalSearchQueryChange={setLocalSearchQuery}
+          onLocalSearchQueryChange={(val) => {
+            setLocalSearchQuery(val);
+            setCurrentPage(0);
+          }}
           onLocalSearchSubmit={() => setIsLocalSearchMode(false)}
           searchMode={mcp.searchMode}
           searchQuery={mcp.searchQuery}
@@ -147,7 +151,7 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
           searchResults={mcp.searchResults}
           onSearchSelect={(item) => mcp.doDownload(item)}
           onHighlight={handleHighlight}
-          onSelect={() => {}}
+          onSelect={handleHighlight}
           leftPanelCols={leftPanelCols}
         />
 

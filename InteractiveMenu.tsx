@@ -98,7 +98,7 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
 
   // ─── 렌더링 ───
   return (
-    <Box flexDirection="column" paddingX={1} width={termSize.columns}>
+    <Box flexDirection="column" paddingX={1} width={termSize.columns} height={termSize.rows - 1}>
       <Box>
         <Text bold color="cyan">🚀 termvg - ThorVG Terminal Player</Text>
       </Box>

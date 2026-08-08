@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import path from 'path';
@@ -91,7 +91,7 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
     if (input.toLowerCase() === 'd') { setInvertDark(prev => !prev); }
     if (input.toLowerCase() === 's') { setIsLocalSearchMode(true); }
     if (input.toLowerCase() === 'o') { setInputPath(scanner.basePath); setIsInputMode(true); }
-    if (input.toLowerCase() === 'l') { mcp.openSearch(); }
+    if (input.toLowerCase() === 'l' && scanner.basePath) { mcp.openSearch(); }
   });
 
   // ─── 이벤트 핸들러 ───
@@ -116,6 +116,15 @@ export const InteractiveMenu = ({ wasmModule = realWasmModule }: { wasmModule?: 
   // ─── 렌더링 ───
 
   // 인증 모드: 전체 화면 QR 코드 + 수동 입력
+  const prevAuthStatus = useRef(mcp.authState.status);
+  useEffect(() => {
+    if (mcp.authState.status !== 'idle' && prevAuthStatus.current === 'idle') {
+      // 인증 화면 진입 시 화면 클리어 (이전 Lottie 렌더링 잔상 제거)
+      process.stdout.write('\x1b[2J\x1b[H');
+    }
+    prevAuthStatus.current = mcp.authState.status;
+  }, [mcp.authState.status]);
+
   if (mcp.authState.status !== 'idle') {
     return (
       <Box flexDirection="column" paddingX={2} width={termSize.columns} height={termSize.rows - 1}>

@@ -97,9 +97,12 @@ const command = cli.input[0];
 if (command === 'web') {
   console.log('🚀 Starting web terminal on http://localhost:8080 ...');
   
-  // In a real CLI, this would be 'ttyd -p 8080 termvg'
-  // For the prototype, we invoke tsx directly.
-  const ttyd = spawn('ttyd', ['-W', '-p', '8080', 'npx', 'tsx', 'index.tsx'], {
+  const isTs = process.argv[1].endsWith('.ts') || process.argv[1].endsWith('.tsx');
+  const args = isTs 
+    ? ['-W', '-p', '8080', 'npx', 'tsx', process.argv[1]]
+    : ['-W', '-p', '8080', process.execPath, process.argv[1]];
+
+  const ttyd = spawn('ttyd', args, {
     stdio: 'inherit'
   });
 

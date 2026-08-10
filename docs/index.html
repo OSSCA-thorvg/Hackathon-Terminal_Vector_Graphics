@@ -11,13 +11,159 @@
   <script src="termvg-browser.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; background: #0d1117; overflow: hidden; }
+    html, body { 
+      width: 100%; height: 100%; 
+      background: #0d1117; 
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      overflow: hidden; 
+    }
+    .layout {
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
+    .landing-panel {
+      flex: 0 0 310px;
+      padding: 15px 15px;
+      background: #161b22;
+      border-right: 1px solid #30363d;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    .landing-panel h1 {
+      font-size: 1.4em;
+      margin-bottom: 2px;
+      color: #58a6ff;
+    }
+    .landing-panel p.subtitle {
+      font-size: 0.8em;
+      color: #8b949e;
+      margin-bottom: 15px;
+      line-height: 1.2;
+    }
+    .install-box {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 15px;
+      font-family: 'JetBrains Mono', 'Menlo', monospace;
+      color: #3fb950;
+      font-size: 0.8em;
+      display: flex;
+      justify-content: space-between;
+    }
+    .install-box code {
+      user-select: all;
+    }
+    .landing-panel h2 {
+      font-size: 0.95em;
+      margin-bottom: 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #21262d;
+    }
+    .shortcut-list {
+      list-style: none;
+      margin-bottom: 15px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      column-gap: 5px;
+      row-gap: 8px;
+    }
+    .shortcut-list li {
+      font-size: 0.75em;
+      display: flex;
+      align-items: center;
+    }
+    .kbd {
+      display: inline-block;
+      padding: 2px 4px;
+      font: 10px SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace;
+      line-height: 10px;
+      color: #c9d1d9;
+      background-color: #f0f6fc26;
+      border: 1px solid #f0f6fc33;
+      border-radius: 4px;
+      box-shadow: inset 0 -1px 0 #f0f6fc33;
+      margin-right: 5px;
+    }
+    .warning-box {
+      margin-top: auto;
+      padding: 10px;
+      background: rgba(210, 153, 34, 0.1);
+      border-left: 4px solid #d29922;
+      border-radius: 4px;
+      font-size: 0.75em;
+      color: #e3b341;
+      line-height: 1.3;
+    }
+    .demo-panel {
+      flex: 1;
+      position: relative;
+      background: #0d1117;
+      padding: 15px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .terminal-wrapper {
+      width: 100%;
+      height: 100%;
+      max-width: 1200px;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      background: #0d1117;
+      padding: 10px;
+    }
     #terminal-container { width: 100%; height: 100%; }
     #terminal-container .xterm { height: 100%; }
   </style>
 </head>
 <body>
-  <div id="terminal-container"></div>
+  <div class="layout">
+    <div class="landing-panel">
+      <h1>🚀 TermVG</h1>
+      <p class="subtitle">ThorVG 기반 터미널 벡터 그래픽 플레이어</p>
+      
+      <h2>설치 및 실행</h2>
+      <p style="font-size: 0.75em; color:#8b949e; margin-bottom: 6px;">npm 패키지를 다운로드하고 모든 기능을 경험해 보세요.</p>
+      <div class="install-box">
+        <code>npm i -g termvg</code>
+        <code style="color:#e6edf3">termvg</code>
+      </div>
+
+      <h2>터미널 단축키</h2>
+      <ul class="shortcut-list">
+        <li><span class="kbd">Space</span> 재생/일시정지</li>
+        <li><span class="kbd">M</span> 렌더링 모드</li>
+        <li><span class="kbd">←/→</span> 프레임 이동</li>
+        <li><span class="kbd">D</span> 다크모드 반전</li>
+        <li><span class="kbd">↑/↓</span> 파일 탐색</li>
+        <li><span class="kbd">Enter</span> 파일 로드</li>
+        <li style="grid-column: span 2; margin-top: 2px; flex-direction: column; align-items: flex-start;">
+          <div style="display: flex; align-items: center;"><span class="kbd">L</span> Lottie MCP 온라인 에셋 검색</div>
+          <div style="font-size: 0.85em; color: #8b949e; margin-top: 4px; margin-bottom: 2px; padding-left: 22px; line-height: 1.3;">
+            * 터미널의 QR코드를 스마트폰으로 스캔 후, 리다이렉트된 주소창의 <code>code</code> 파라미터 값을 입력하여 연동합니다.
+          </div>
+        </li>
+      </ul>
+
+      <div class="warning-box">
+        <strong>⚠️ 웹 데모 제약 안내</strong><br>
+        현재 브라우저 데모(WASM)에서는 로컬 파일 탐색과 온라인 검색 기능이 제한됩니다. <br>
+        <b>모든 기능은 터미널에 직접 패키지를 설치하여 이용해 주세요.</b>
+      </div>
+    </div>
+    <div class="demo-panel">
+      <div class="terminal-wrapper">
+        <div id="terminal-container"></div>
+      </div>
+    </div>
+  </div>
   <script>
     // ── Config ──
     const SAMPLES = [
